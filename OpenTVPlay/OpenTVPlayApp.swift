@@ -15,7 +15,7 @@ struct OpenTVPlayApp: App {
         WindowGroup {
             Group {
                 if authManager.isAuthenticated {
-                    LibraryView()
+                    MainTabView()
                 } else {
                     LoginView()
                 }

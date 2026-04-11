@@ -2,6 +2,7 @@ import SwiftUI
 
 struct StreamView: View {
     let game: GameInfo
+    var settings: StreamSettings = StreamSettings()
     let onDismiss: () -> Void
 
     @Environment(AuthManager.self) var authManager
@@ -151,7 +152,7 @@ struct StreamView: View {
                 token: token,
                 zone: "",
                 streamingBaseUrl: base,
-                settings: StreamSettings(),
+                settings: settings,
                 accountLinked: true
             )
 

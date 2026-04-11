@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct LibraryView: View {
+struct StoreView: View {
     let games: [GameInfo]
 
     @Environment(AuthManager.self) var authManager
@@ -27,7 +27,7 @@ struct LibraryView: View {
                     gameGrid
                 }
             }
-            .navigationTitle("Library")
+            .navigationTitle("Store")
         }
         .fullScreenCover(isPresented: $showStream) {
             if let game = selectedGame {
@@ -37,94 +37,38 @@ struct LibraryView: View {
         }
     }
 
-    // MARK: Game Grid
-
     private var gameGrid: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 40) {
                 ForEach(games) { game in
-                    LibraryCardView(game: game, isFavorite: viewModel.isFavorite(game.id)) {
-                        viewModel.toggleFavorite(game.id)
-                    }
-                    .onTapGesture {
-                        selectedGame = game
-                        showStream = true
-                    }
+                    StoreCardView(game: game, isInLibrary: game.isInLibrary)
+                        .onTapGesture {
+                            selectedGame = game
+                            showStream = true
+                        }
                 }
             }
             .padding(60)
         }
     }
 
-    // MARK: Empty State
-
     private var emptyState: some View {
         VStack(spacing: 24) {
-            Image(systemName: "books.vertical")
+            Image(systemName: "bag")
                 .font(.system(size: 60))
                 .foregroundStyle(.secondary)
-            Text("Library Empty")
+            Text("No games available")
                 .font(.title2.weight(.semibold))
                 .foregroundStyle(.white)
-            Text("Games you own or have linked will appear here.")
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
         }
-        .padding(60)
     }
 }
 
-// MARK: - Game Card (shared)
+// MARK: - Store Card
 
-struct GameCardView: View {
+struct StoreCardView: View {
     let game: GameInfo
-    @Environment(\.isFocused) var isFocused
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            AsyncImage(url: game.boxArtUrl.flatMap { URL(string: $0) }) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(2/3, contentMode: .fill)
-                case .failure, .empty:
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.gray.opacity(0.3))
-                        .aspectRatio(2/3, contentMode: .fit)
-                        .overlay {
-                            Image(systemName: "gamecontroller")
-                                .font(.system(size: 40))
-                                .foregroundStyle(.secondary)
-                        }
-                @unknown default:
-                    Color.gray.opacity(0.3)
-                        .aspectRatio(2/3, contentMode: .fit)
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .shadow(radius: isFocused ? 20 : 4)
-            .scaleEffect(isFocused ? 1.05 : 1.0)
-            .animation(.easeInOut(duration: 0.15), value: isFocused)
-
-            Text(game.title)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.white)
-                .lineLimit(2)
-        }
-        .focusable()
-        .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Library Card
-
-struct LibraryCardView: View {
-    let game: GameInfo
-    let isFavorite: Bool
-    let onFavoriteToggle: () -> Void
-
+    let isInLibrary: Bool
     @Environment(\.isFocused) var isFocused
 
     var body: some View {
@@ -152,17 +96,14 @@ struct LibraryCardView: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 12))
 
-                if isFocused {
-                    Button {
-                        onFavoriteToggle()
-                    } label: {
-                        Image(systemName: isFavorite ? "heart.fill" : "heart")
-                            .foregroundStyle(isFavorite ? .red : .white)
-                            .padding(10)
-                            .background(.black.opacity(0.5), in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(8)
+                if isInLibrary {
+                    Text("In Library")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.green.opacity(0.85), in: Capsule())
+                        .padding(8)
                 }
             }
             .shadow(radius: isFocused ? 20 : 4)

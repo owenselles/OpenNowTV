@@ -1,27 +1,31 @@
-# OpenNowTV
+# OpenTVPlay
 
 A native GeForce NOW client for Apple TV. Stream your entire PC game library directly on tvOS with full controller support — no browser, no workarounds.
 
-> **Personal use / sideload only.** This project is not affiliated with or endorsed by NVIDIA.
+> **Personal use / sideload only.** This project is not affiliated with, endorsed by, or sponsored by NVIDIA. NVIDIA and GeForce NOW are trademarks of NVIDIA Corporation.
 
 ---
 
 ## Features
 
-- **Native tvOS UI** — Focus-engine compatible game browser, navigable entirely by remote or controller
-- **Full GFN streaming** — WebRTC-based, H.264/H.265, up to 4K@60fps (subject to your GFN subscription)
-- **Controller support** — Up to 4 simultaneous MFi/Xbox/PlayStation controllers via GameController framework
-- **NVIDIA OAuth login** — Standard PKCE flow; authentication completes on your paired iPhone via Handoff
-- **Live stats overlay** — Bitrate, resolution, FPS, RTT, packet loss — toggle with the Menu button
-- **Keychain persistence** — Session tokens stored securely, auto-refreshed on launch
+- **Tab bar navigation** — Home, Library, Store, and Settings; fully focus-engine compatible
+- **Home screen** — "Continue Playing" row powered by live active sessions, plus a Favorites row
+- **Library & Store** — browse your linked games separately from the full public catalog
+- **Stream quality settings** — resolution (720p/1080p/4K), frame rate, codec (H.264/H.265/AV1), and color quality (SDR/HDR) from the Settings tab
+- **Favorites** — heart any game in your Library; persisted locally
+- **Full GFN streaming** — WebRTC-based, up to 4K@60fps (subject to your GFN subscription tier)
+- **Controller support** — up to 4 simultaneous MFi/Xbox/PlayStation controllers via the GameController framework
+- **NVIDIA OAuth login** — PKCE flow; authentication completes on your paired iPhone via Handoff
+- **Live stats overlay** — bitrate, resolution, FPS, RTT, packet loss — toggle with the Menu button
+- **Keychain persistence** — session tokens stored securely and auto-refreshed on launch
 
 ## Requirements
 
-- Apple TV (4K, 2nd generation or later)
+- Apple TV 4K (2nd generation or later) running tvOS 17+
 - Xcode 16+ on a Mac
 - Active GeForce NOW account (Free, Priority, or Ultimate)
 - Apple Developer account (free tier works for sideloading)
-- iPhone paired with the Apple TV (for initial login via Handoff)
+- iPhone paired with your Apple TV (for initial login via Handoff)
 
 ## Getting Started
 
@@ -32,23 +36,23 @@ git clone https://github.com/your-username/OpenTVPlay.git
 cd OpenTVPlay
 ```
 
-### 2. Open in Xcode
+### 2. Add the WebRTC package
 
-```bash
-open OpenTVPlay.xcodeproj
-```
+Open `OpenTVPlay.xcodeproj` in Xcode, then:
 
-The `LiveKitWebRTC` package resolves automatically via Swift Package Manager.
+**File → Add Package Dependencies…**
+Paste: `https://github.com/livekit/webrtc-xcframework`
+Target: **WebRTC**
 
 ### 3. Set your Team
 
-In Xcode → OpenTVPlay target → Signing & Capabilities, select your Apple Developer team. Automatic signing will create the provisioning profile.
+Xcode → OpenTVPlay target → **Signing & Capabilities** → select your Apple Developer team.
 
 ### 4. Build & Run
 
-Connect your Apple TV via USB-C or select it as the run destination over the network, then hit **Run** (⌘R).
+Select your Apple TV as the run destination (USB-C or network) and hit **⌘R**.
 
-On first launch, the app will prompt you to sign in. A notification appears on your paired iPhone — tap it to complete login in Safari, then return to the TV.
+On first launch the app prompts you to sign in. A notification appears on your paired iPhone — tap it to complete OAuth in Safari, then return to the TV.
 
 ---
 
@@ -57,27 +61,32 @@ On first launch, the app will prompt you to sign in. A notification appears on y
 ```
 OpenTVPlay/
 ├── Auth/
-│   ├── AuthManager.swift        @Observable auth state, Keychain persistence
-│   └── NVIDIAAuthAPI.swift      OAuth 2.0 PKCE, token refresh, user info
+│   ├── AuthManager.swift           @Observable auth state, Keychain persistence
+│   └── NVIDIAAuthAPI.swift         OAuth 2.0 PKCE, token refresh, user info
 ├── Session/
-│   ├── SessionState.swift       Models: GameInfo, SessionInfo, StreamSettings
-│   ├── CloudMatchClient.swift   Session create/poll/stop (NVIDIA CloudMatch API)
-│   └── GamesClient.swift        Game library via GraphQL persisted query
+│   ├── SessionState.swift          Models: GameInfo, SessionInfo, StreamSettings
+│   ├── CloudMatchClient.swift      Session create/poll/stop/active-sessions
+│   └── GamesClient.swift           Game catalog via GraphQL persisted query
 ├── Streaming/
-│   ├── GFNStreamController.swift  WebRTC peer connection lifecycle (@Observable)
-│   ├── SignalingClient.swift       WebSocket signaling (SDP offer/answer, ICE)
-│   └── InputSender.swift          GCController → XInput binary protocol
+│   ├── GFNStreamController.swift   WebRTC peer connection lifecycle (@Observable)
+│   ├── SignalingClient.swift        WebSocket signaling — SDP offer/answer + ICE
+│   └── InputSender.swift           GCController → XInput binary protocol → data channel
 ├── Video/
-│   └── VideoSurfaceView.swift     LKRTCMTLVideoView (Metal) as UIViewRepresentable
+│   └── VideoSurfaceView.swift      Metal-backed video surface (UIViewRepresentable)
 └── UI/
-    ├── LoginView.swift            Sign-in screen with Handoff instructions
-    ├── LibraryView.swift          LazyVGrid game browser
-    └── StreamView.swift           Full-screen player + HUD overlay
+    ├── GamesViewModel.swift        Shared @Observable — games, sessions, favorites, settings
+    ├── MainTabView.swift           Root TabView (Home / Library / Store / Settings)
+    ├── HomeView.swift              Hero banner + Continue Playing + Favorites rows
+    ├── LibraryView.swift           LIBRARY panel grid with favorite toggles
+    ├── StoreView.swift             MAIN catalog grid with "In Library" badges
+    ├── SettingsView.swift          Stream quality pickers + account info + sign out
+    ├── LoginView.swift             Sign-in screen with Handoff instructions
+    └── StreamView.swift            Full-screen player + HUD stats overlay
 ```
 
 ### Protocol
 
-The GFN streaming protocol was reverse-engineered by [OpenNOW](https://github.com/OpenCloudGaming/OpenNOW) (TypeScript/Electron). This project ports their work to native Swift.
+The GFN streaming protocol was reverse-engineered by [OpenNOW](https://github.com/OpenCloudGaming/OpenNOW) (TypeScript/Electron). This project ports their work to native Swift/tvOS.
 
 | Layer | Implementation |
 |-------|---------------|
@@ -92,18 +101,25 @@ The GFN streaming protocol was reverse-engineered by [OpenNOW](https://github.co
 
 ## Known Limitations
 
-- **No App Store.** NVIDIA has not published a public API for third-party GFN clients. This project is for personal sideloading only.
-- **SDP munging not yet implemented.** The GFN server sends a non-standard SDP with proprietary extensions (`a=ri.*`). Advanced codec negotiation (AV1, partial reliability) from OpenNOW's `sdp.ts` is not yet ported.
-- **No microphone support.** The server supports mic input over a second data channel; this is not implemented yet.
-- **No queue/ad handling.** During high-demand periods, GFN places sessions in a queue and shows ads while waiting. This app shows a spinner only.
+- **No App Store.** NVIDIA has not published a public API for third-party GFN clients. Sideloading only.
+- **SDP munging not yet implemented.** Advanced codec negotiation (AV1, partial reliability) from OpenNOW's `sdp.ts` is not yet ported.
+- **No microphone support.** The server supports mic input over a second data channel; not implemented yet.
+- **No queue/ad handling.** During high demand, GFN queues sessions and shows ads. The app shows a spinner only.
 
 ## Contributing
 
 PRs welcome, especially for:
+
 - SDP munging (`Streaming/SDPProcessor.swift`)
 - Microphone support
 - Session queue / ad state UI
 - macOS Catalyst or visionOS port
+
+## Sponsoring
+
+If this project is useful to you, consider sponsoring to help keep it maintained.
+
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor%20on%20GitHub-%E2%9D%A4-pink?style=flat-square&logo=github)](https://github.com/sponsors/your-username)
 
 ## License
 

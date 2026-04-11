@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Stream Settings
 
-struct StreamSettings: Codable {
+struct StreamSettings: Codable, Equatable {
     var resolution: String = "1920x1080"
     var fps: Int = 60
     var maxBitrateKbps: Int = 50_000
