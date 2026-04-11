@@ -1,4 +1,4 @@
-# OpenTVPlay
+# OpenNowTV
 
 A native GeForce NOW client for Apple TV. Stream your entire PC game library directly on tvOS with full controller support — no browser, no workarounds.
 
@@ -32,13 +32,13 @@ A native GeForce NOW client for Apple TV. Stream your entire PC game library dir
 ### 1. Clone
 
 ```bash
-git clone https://github.com/your-username/OpenTVPlay.git
-cd OpenTVPlay
+git clone https://github.com/owenselles/OpenNowTV.git
+cd OpenNowTV
 ```
 
 ### 2. Add the WebRTC package
 
-Open `OpenTVPlay.xcodeproj` in Xcode, then:
+Open `OpenNowTV.xcodeproj` in Xcode, then:
 
 **File → Add Package Dependencies…**
 Paste: `https://github.com/livekit/webrtc-xcframework`
@@ -46,7 +46,7 @@ Target: **WebRTC**
 
 ### 3. Set your Team
 
-Xcode → OpenTVPlay target → **Signing & Capabilities** → select your Apple Developer team.
+Xcode → OpenNowTV target → **Signing & Capabilities** → select your Apple Developer team.
 
 ### 4. Build & Run
 
@@ -59,7 +59,7 @@ On first launch the app prompts you to sign in. A notification appears on your p
 ## Architecture
 
 ```
-OpenTVPlay/
+OpenNowTV/
 ├── Auth/
 │   ├── AuthManager.swift           @Observable auth state, Keychain persistence
 │   └── NVIDIAAuthAPI.swift         OAuth 2.0 PKCE, token refresh, user info
@@ -119,7 +119,7 @@ PRs welcome, especially for:
 
 If this project is useful to you, consider sponsoring to help keep it maintained.
 
-[![GitHub Sponsors](https://img.shields.io/badge/Sponsor%20on%20GitHub-%E2%9D%A4-pink?style=flat-square&logo=github)](https://github.com/sponsors/your-username)
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor%20on%20GitHub-%E2%9D%A4-pink?style=flat-square&logo=github)](https://github.com/sponsors/owenselles)
 
 ## License
 

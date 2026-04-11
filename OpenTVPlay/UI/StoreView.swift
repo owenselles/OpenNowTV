@@ -14,20 +14,15 @@ struct StoreView: View {
     ]
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color.black.ignoresSafeArea()
-                if games.isEmpty && viewModel.isLoading {
-                    ProgressView()
-                        .scaleEffect(2)
-                        .tint(.white)
-                } else if games.isEmpty {
-                    emptyState
-                } else {
-                    gameGrid
-                }
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if games.isEmpty && viewModel.isLoading {
+                ProgressView().scaleEffect(2).tint(.white)
+            } else if games.isEmpty {
+                emptyState
+            } else {
+                gameGrid
             }
-            .navigationTitle("Store")
         }
         .fullScreenCover(isPresented: $showStream) {
             if let game = selectedGame {
@@ -41,11 +36,13 @@ struct StoreView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 40) {
                 ForEach(games) { game in
-                    StoreCardView(game: game, isInLibrary: game.isInLibrary)
-                        .onTapGesture {
-                            selectedGame = game
-                            showStream = true
-                        }
+                    Button {
+                        selectedGame = game
+                        showStream = true
+                    } label: {
+                        StoreCardLabel(game: game)
+                    }
+                    .buttonStyle(.card)
                 }
             }
             .padding(60)
@@ -64,58 +61,38 @@ struct StoreView: View {
     }
 }
 
-// MARK: - Store Card
+// MARK: - Store Card Label
 
-struct StoreCardView: View {
+private struct StoreCardLabel: View {
     let game: GameInfo
-    let isInLibrary: Bool
-    @Environment(\.isFocused) var isFocused
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ZStack(alignment: .topTrailing) {
-                AsyncImage(url: game.boxArtUrl.flatMap { URL(string: $0) }) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(2/3, contentMode: .fill)
-                    case .failure, .empty:
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.gray.opacity(0.3))
-                            .aspectRatio(2/3, contentMode: .fit)
-                            .overlay {
-                                Image(systemName: "gamecontroller")
-                                    .font(.system(size: 40))
-                                    .foregroundStyle(.secondary)
-                            }
-                    @unknown default:
-                        Color.gray.opacity(0.3)
-                            .aspectRatio(2/3, contentMode: .fit)
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+        ZStack(alignment: .bottomLeading) {
+            GameBoxArt(url: game.boxArtUrl)
 
-                if isInLibrary {
-                    Text("In Library")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(.green.opacity(0.85), in: Capsule())
-                        .padding(8)
-                }
-            }
-            .shadow(radius: isFocused ? 20 : 4)
-            .scaleEffect(isFocused ? 1.05 : 1.0)
-            .animation(.easeInOut(duration: 0.15), value: isFocused)
+            LinearGradient(
+                colors: [.black.opacity(0.7), .clear],
+                startPoint: .bottom,
+                endPoint: .center
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
 
             Text(game.title)
-                .font(.caption.weight(.medium))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(.white)
                 .lineLimit(2)
+                .padding(10)
+
+            if game.isInLibrary {
+                Text("In Library")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.green.opacity(0.85), in: Capsule())
+                    .padding(8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            }
         }
-        .focusable()
-        .buttonStyle(.plain)
     }
 }

@@ -111,12 +111,11 @@ struct HomeView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 24) {
                     ForEach(games) { game in
-                        GameCardView(game: game)
-                            .frame(width: 200)
-                            .onTapGesture {
-                                selectedGame = game
-                                showStream = true
-                            }
+                        GameCardView(game: game) {
+                            selectedGame = game
+                            showStream = true
+                        }
+                        .frame(width: 200)
                     }
                 }
                 .padding(.horizontal, 60)

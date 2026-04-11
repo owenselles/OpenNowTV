@@ -14,20 +14,15 @@ struct LibraryView: View {
     ]
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color.black.ignoresSafeArea()
-                if games.isEmpty && viewModel.isLoading {
-                    ProgressView()
-                        .scaleEffect(2)
-                        .tint(.white)
-                } else if games.isEmpty {
-                    emptyState
-                } else {
-                    gameGrid
-                }
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if games.isEmpty && viewModel.isLoading {
+                ProgressView().scaleEffect(2).tint(.white)
+            } else if games.isEmpty {
+                emptyState
+            } else {
+                gameGrid
             }
-            .navigationTitle("Library")
         }
         .fullScreenCover(isPresented: $showStream) {
             if let game = selectedGame {
@@ -37,26 +32,22 @@ struct LibraryView: View {
         }
     }
 
-    // MARK: Game Grid
-
     private var gameGrid: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 40) {
                 ForEach(games) { game in
-                    LibraryCardView(game: game, isFavorite: viewModel.isFavorite(game.id)) {
-                        viewModel.toggleFavorite(game.id)
-                    }
-                    .onTapGesture {
+                    Button {
                         selectedGame = game
                         showStream = true
+                    } label: {
+                        GameCardLabel(game: game)
                     }
+                    .buttonStyle(.card)
                 }
             }
             .padding(60)
         }
     }
-
-    // MARK: Empty State
 
     private var emptyState: some View {
         VStack(spacing: 24) {
@@ -75,46 +66,64 @@ struct LibraryView: View {
     }
 }
 
-// MARK: - Game Card (shared)
+// MARK: - Shared Box Art
+
+struct GameBoxArt: View {
+    let url: String?
+
+    var body: some View {
+        AsyncImage(url: url.flatMap { URL(string: $0) }) { phase in
+            switch phase {
+            case .success(let image):
+                image.resizable().aspectRatio(2/3, contentMode: .fill)
+            case .failure, .empty:
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .aspectRatio(2/3, contentMode: .fit)
+            @unknown default:
+                Color.gray.opacity(0.2).aspectRatio(2/3, contentMode: .fit)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - Game Card Label (shared)
+
+struct GameCardLabel: View {
+    let game: GameInfo
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            GameBoxArt(url: game.boxArtUrl)
+
+            LinearGradient(
+                colors: [.black.opacity(0.7), .clear],
+                startPoint: .bottom,
+                endPoint: .center
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            Text(game.title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+                .lineLimit(2)
+                .padding(10)
+        }
+    }
+}
+
+// MARK: - Game Card (used on Home rows)
 
 struct GameCardView: View {
     let game: GameInfo
-    @Environment(\.isFocused) var isFocused
+    let onPlay: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            AsyncImage(url: game.boxArtUrl.flatMap { URL(string: $0) }) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(2/3, contentMode: .fill)
-                case .failure, .empty:
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.gray.opacity(0.3))
-                        .aspectRatio(2/3, contentMode: .fit)
-                        .overlay {
-                            Image(systemName: "gamecontroller")
-                                .font(.system(size: 40))
-                                .foregroundStyle(.secondary)
-                        }
-                @unknown default:
-                    Color.gray.opacity(0.3)
-                        .aspectRatio(2/3, contentMode: .fit)
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .shadow(radius: isFocused ? 20 : 4)
-            .scaleEffect(isFocused ? 1.05 : 1.0)
-            .animation(.easeInOut(duration: 0.15), value: isFocused)
-
-            Text(game.title)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.white)
-                .lineLimit(2)
+        Button(action: onPlay) {
+            GameCardLabel(game: game)
         }
-        .focusable()
-        .buttonStyle(.plain)
+        .buttonStyle(.card)
     }
 }
 
@@ -124,57 +133,12 @@ struct LibraryCardView: View {
     let game: GameInfo
     let isFavorite: Bool
     let onFavoriteToggle: () -> Void
-
-    @Environment(\.isFocused) var isFocused
+    let onPlay: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ZStack(alignment: .topTrailing) {
-                AsyncImage(url: game.boxArtUrl.flatMap { URL(string: $0) }) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(2/3, contentMode: .fill)
-                    case .failure, .empty:
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.gray.opacity(0.3))
-                            .aspectRatio(2/3, contentMode: .fit)
-                            .overlay {
-                                Image(systemName: "gamecontroller")
-                                    .font(.system(size: 40))
-                                    .foregroundStyle(.secondary)
-                            }
-                    @unknown default:
-                        Color.gray.opacity(0.3)
-                            .aspectRatio(2/3, contentMode: .fit)
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                if isFocused {
-                    Button {
-                        onFavoriteToggle()
-                    } label: {
-                        Image(systemName: isFavorite ? "heart.fill" : "heart")
-                            .foregroundStyle(isFavorite ? .red : .white)
-                            .padding(10)
-                            .background(.black.opacity(0.5), in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(8)
-                }
-            }
-            .shadow(radius: isFocused ? 20 : 4)
-            .scaleEffect(isFocused ? 1.05 : 1.0)
-            .animation(.easeInOut(duration: 0.15), value: isFocused)
-
-            Text(game.title)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.white)
-                .lineLimit(2)
+        Button(action: onPlay) {
+            GameCardLabel(game: game)
         }
-        .focusable()
-        .buttonStyle(.plain)
+        .buttonStyle(.card)
     }
 }
