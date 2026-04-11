@@ -1,0 +1,120 @@
+import Foundation
+import Observation
+
+// MARK: - AuthSession (persisted)
+
+struct AuthSession: Codable {
+    var provider: LoginProvider
+    var tokens: AuthTokens
+    var user: AuthUser
+}
+
+// MARK: - AuthManager
+
+@Observable
+@MainActor
+final class AuthManager {
+    private(set) var session: AuthSession?
+    private(set) var isLoading = false
+    private(set) var loginError: String?
+
+    var isAuthenticated: Bool { session != nil }
+
+    private let api = NVIDIAAuthAPI()
+
+    // MARK: Lifecycle
+
+    func initialize() async {
+        guard let stored = try? KeychainService.load(),
+              let saved = try? JSONDecoder().decode(AuthSession.self, from: stored)
+        else { return }
+        session = saved
+        await refreshIfNeeded()
+    }
+
+    // MARK: Login
+
+    func login(with provider: LoginProvider? = nil) async {
+        isLoading = true
+        loginError = nil
+        do {
+            let providers: [LoginProvider]
+            if let provider {
+                providers = [provider]
+            } else {
+                providers = (try? await api.fetchProviders()) ?? []
+            }
+            let selectedProvider = providers.first ?? LoginProvider(
+                idpId: NVIDIAAuth.defaultIdpId,
+                code: "NVIDIA",
+                displayName: "NVIDIA",
+                streamingServiceUrl: NVIDIAAuth.defaultStreamingUrl,
+                priority: 0
+            )
+            let pkce = PKCE.generate()
+            var tokens = try await api.login(provider: selectedProvider, pkce: pkce)
+            let user = try await api.fetchUserInfo(tokens: tokens)
+
+            // Bootstrap client token
+            if let ct = try? await api.fetchClientToken(accessToken: tokens.accessToken) {
+                tokens.clientToken = ct.token
+                tokens.clientTokenExpiresAt = ct.expiresAt
+            }
+
+            let newSession = AuthSession(provider: selectedProvider, tokens: tokens, user: user)
+            session = newSession
+            try persist(newSession)
+        } catch {
+            loginError = error.localizedDescription
+        }
+        isLoading = false
+    }
+
+    // MARK: Logout
+
+    func logout() {
+        session = nil
+        KeychainService.delete()
+    }
+
+    // MARK: Token Refresh
+
+    /// Returns the best available JWT token, refreshing if near expiry.
+    func resolveToken() async throws -> String {
+        guard var s = session else { throw AuthError.noSession }
+        if s.tokens.isNearExpiry {
+            s = try await refresh(session: s)
+        }
+        return s.tokens.idToken ?? s.tokens.accessToken
+    }
+
+    // MARK: Private
+
+    private func refreshIfNeeded() async {
+        guard let s = session, s.tokens.isNearExpiry else { return }
+        if let refreshed = try? await refresh(session: s) {
+            session = refreshed
+            try? persist(refreshed)
+        }
+    }
+
+    private func refresh(session s: AuthSession) async throws -> AuthSession {
+        var updated = s
+        if let refreshToken = s.tokens.refreshToken {
+            updated.tokens = try await api.refreshTokens(refreshToken)
+        }
+        // Re-bootstrap client token after refresh
+        if let ct = try? await api.fetchClientToken(accessToken: updated.tokens.accessToken) {
+            updated.tokens.clientToken = ct.token
+            updated.tokens.clientTokenExpiresAt = ct.expiresAt
+        }
+        session = updated
+        try persist(updated)
+        return updated
+    }
+
+    private func persist(_ s: AuthSession) throws {
+        let data = try JSONEncoder().encode(s)
+        try KeychainService.save(data)
+    }
+}

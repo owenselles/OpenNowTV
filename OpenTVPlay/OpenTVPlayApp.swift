@@ -9,9 +9,19 @@ import SwiftUI
 
 @main
 struct OpenTVPlayApp: App {
+    @State private var authManager = AuthManager()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            Group {
+                if authManager.isAuthenticated {
+                    LibraryView()
+                } else {
+                    LoginView()
+                }
+            }
+            .environment(authManager)
+            .task { await authManager.initialize() }
         }
     }
 }
