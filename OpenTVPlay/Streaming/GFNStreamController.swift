@@ -47,6 +47,7 @@ final class GFNStreamController: NSObject {
     private var inputSender: InputSender?
     private var statsTimer: Timer?
     private var protocolVersion = 2
+    private var partialReliableThresholdMs = 300
     private var sessionInfo: SessionInfo?
     private var settings = StreamSettings()
     private var micAudioSource: LKRTCAudioSource?
@@ -164,12 +165,32 @@ final class GFNStreamController: NSObject {
             await attachMicrophone(to: pc)
         }
 
+        // Extract partial-reliable threshold from offer if the server advertises one
+        if let match = sdp.range(of: #"ri\.partialReliableThresholdMs[: ]+(\d+)"#, options: .regularExpression),
+           let numMatch = sdp[match].range(of: #"\d+"#, options: .regularExpression),
+           let ms = Int(sdp[numMatch]) {
+            partialReliableThresholdMs = ms
+        }
+
         // Munge the remote offer: filter to preferred codec before setting remote description
         let filteredSdp = SDPMunger.preferCodec(sdp, codec: settings.codec)
         let remoteSDP = LKRTCSessionDescription(type: .offer, sdp: filteredSdp)
         try? await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             pc.setRemoteDescription(remoteSDP) { error in
                 if let error { cont.resume(throwing: error) } else { cont.resume() }
+            }
+        }
+
+        // Inject a direct host ICE candidate from the server IP extracted from the hostname.
+        // GFN hostnames encode the IP as "10-1-2-3.zone.nvidiagrid.net"; extracting it ensures
+        // a direct candidate is available even if STUN traversal fails.
+        if let serverHost = session.serverIp.isEmpty ? nil : session.serverIp {
+            if let directIp = Self.extractIpFromHost(serverHost) {
+                for mLineIndex in 0...3 {
+                    let sdp = "candidate:1 1 UDP 2130706431 \(directIp) 49100 typ host"
+                    let candidate = LKRTCIceCandidate(sdp: sdp, sdpMLineIndex: Int32(mLineIndex), sdpMid: "\(mLineIndex)")
+                    pc.add(candidate)
+                }
             }
         }
 
@@ -221,7 +242,7 @@ final class GFNStreamController: NSObject {
         lines += [
             "m=application 0 RTP/AVP",
             "a=msid:input_1",
-            "a=ri.partialReliableThresholdMs: 300",
+            "a=ri.partialReliableThresholdMs: \(partialReliableThresholdMs)",
             "a=ri.hidDeviceMask: 0",
             "a=ri.enablePartiallyReliableTransferGamepad: 65535",
             "a=ri.enablePartiallyReliableTransferHid: 0",
@@ -250,6 +271,16 @@ final class GFNStreamController: NSObject {
         micAudioSource = source
         micAudioTrack = track
         pc.add(track, streamIds: ["mic"])
+    }
+
+    /// Extracts a dotted-decimal IP from a hostname that encodes it as dashes,
+    /// e.g. "10-1-2-3.zone.nvidiagrid.net" → "10.1.2.3".
+    /// Returns nil if the host is already a plain IP or doesn't match the pattern.
+    private static func extractIpFromHost(_ host: String) -> String? {
+        let label = host.components(separatedBy: ".").first ?? host
+        let parts = label.components(separatedBy: "-")
+        guard parts.count == 4, parts.allSatisfy({ Int($0) != nil }) else { return nil }
+        return parts.joined(separator: ".")
     }
 
     private func addRemoteICE(candidate: String, sdpMid: String?, sdpMLineIndex: Int?) {

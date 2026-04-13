@@ -60,6 +60,15 @@ private struct CloudMatchResponse: Decodable {
     }
 }
 
+// Ad action codes sent to CloudMatch
+enum AdAction: Int {
+    case start  = 1
+    case pause  = 2
+    case resume = 3
+    case finish = 4
+    case cancel = 5
+}
+
 // GFN API returns ip as either a string or array of strings
 private struct AnyCodableString: Decodable {
     let value: String?
@@ -300,6 +309,9 @@ actor CloudMatchClient {
             return MediaConnectionInfo(ip: ip, port: mc.port)
         }
 
+        // Ad state — parse raw JSON for flexibility since ad schema varies
+        let adState = extractAdState(from: payload)
+
         return SessionInfo(
             sessionId: s.sessionId,
             status: s.status,
@@ -313,8 +325,101 @@ actor CloudMatchClient {
             iceServers: iceServers,
             mediaConnectionInfo: media,
             clientId: clientId,
-            deviceId: deviceId
+            deviceId: deviceId,
+            adState: adState
         )
+    }
+
+    /// Parses ad state from the raw response JSON, handling schema variations across GFN API versions.
+    private func extractAdState(from payload: CloudMatchResponse) -> SessionAdState? {
+        // Re-decode as raw JSON to access ad fields not in our typed model
+        guard let data = try? JSONEncoder().encode(payload),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let sessionObj = root["session"] as? [String: Any] else { return nil }
+
+        // isAdsRequired lives in several possible places
+        func bool(_ key: String, in obj: [String: Any]) -> Bool? {
+            guard let v = obj[key] else { return nil }
+            if let b = v as? Bool { return b }
+            if let i = v as? Int { return i != 0 }
+            return nil
+        }
+
+        let isAdsRequired = bool("sessionAdsRequired", in: sessionObj)
+            ?? bool("isAdsRequired", in: sessionObj)
+            ?? bool("isAdsRequired", in: (sessionObj["sessionProgress"] as? [String: Any]) ?? [:])
+            ?? bool("isAdsRequired", in: (sessionObj["progressInfo"] as? [String: Any]) ?? [:])
+            ?? false
+
+        let isQueuePaused = bool("isQueuePaused", in: sessionObj)
+            ?? bool("queuePaused", in: (sessionObj["opportunity"] as? [String: Any]) ?? [:])
+
+        let gracePeriodSeconds = (sessionObj["opportunity"] as? [String: Any])?["gracePeriodSeconds"] as? Int
+
+        let message = (sessionObj["opportunity"] as? [String: Any]).flatMap {
+            ($0["message"] ?? $0["description"]) as? String
+        }
+
+        let adsRaw = sessionObj["sessionAds"] as? [[String: Any]] ?? []
+        let ads: [SessionAdInfo] = adsRaw.enumerated().compactMap { idx, ad in
+            let adId = (ad["adId"] as? String) ?? "ad-\(idx + 1)"
+            let mediaFiles = (ad["adMediaFiles"] as? [[String: Any]] ?? []).compactMap { f -> SessionAdMediaFile? in
+                let url = f["mediaFileUrl"] as? String
+                let profile = f["encodingProfile"] as? String
+                guard url != nil || profile != nil else { return nil }
+                return SessionAdMediaFile(mediaFileUrl: url, encodingProfile: profile)
+            }
+            let adUrl = ad["adUrl"] as? String
+            let mediaUrl = (ad["mediaUrl"] ?? ad["videoUrl"] ?? ad["url"]) as? String
+            let lengthSeconds = (ad["adLengthInSeconds"] ?? ad["durationMs"]) as? Double
+            return SessionAdInfo(adId: adId, adUrl: adUrl, mediaUrl: mediaUrl,
+                                 adMediaFiles: mediaFiles, adLengthInSeconds: lengthSeconds)
+        }
+
+        // Only return an ad state if there's actually something to act on
+        if !isAdsRequired, ads.isEmpty, isQueuePaused != true { return nil }
+
+        return SessionAdState(
+            isAdsRequired: isAdsRequired,
+            isQueuePaused: isQueuePaused,
+            gracePeriodSeconds: gracePeriodSeconds,
+            message: message,
+            ads: ads
+        )
+    }
+
+    // MARK: Report Ad Event
+
+    func reportAdEvent(
+        sessionId: String,
+        token: String,
+        base: String,
+        serverIp: String?,
+        clientId: String,
+        deviceId: String,
+        adId: String,
+        action: AdAction,
+        watchedTimeMs: Int? = nil,
+        pausedTimeMs: Int? = nil
+    ) async {
+        let effectiveBase = serverIp.map { "https://\($0)" } ?? base
+        guard let url = URL(string: "\(effectiveBase)/v2/session/\(sessionId)") else { return }
+        var adUpdate: [String: Any] = [
+            "adId": adId,
+            "adAction": action.rawValue,
+            "clientTimestamp": Int(Date().timeIntervalSince1970),
+        ]
+        if let ms = watchedTimeMs { adUpdate["watchedTimeInMs"] = max(0, ms) }
+        if let ms = pausedTimeMs  { adUpdate["pausedTimeInMs"]  = max(0, ms) }
+        let body: [String: Any] = ["action": 6, "adUpdates": [adUpdate]]
+        guard let bodyData = try? JSONSerialization.data(withJSONObject: body) else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        for (k, v) in gfnHeaders(token: token, clientId: clientId, deviceId: deviceId, includeOrigin: true) {
+            request.setValue(v, forHTTPHeaderField: k)
+        }
+        request.httpBody = bodyData
+        _ = try? await urlSession.data(for: request)
     }
 
     private func defaultIceServers() -> [IceServer] {

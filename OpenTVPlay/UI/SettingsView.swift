@@ -4,6 +4,8 @@ struct SettingsView: View {
     @Environment(AuthManager.self) var authManager
     @Environment(GamesViewModel.self) var viewModel
 
+    @State private var showZonePicker = false
+
     private let resolutions = ["1280x720", "1920x1080", "3840x2160"]
     private let fpsOptions = [30, 60, 120]
 
@@ -38,6 +40,31 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Server Region") {
+                    Button {
+                        showZonePicker = true
+                    } label: {
+                        HStack {
+                            Text("Preferred Zone")
+                            Spacer()
+                            Text(zoneLabel(vm.streamSettings.preferredZoneUrl))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .foregroundStyle(.primary)
+
+                    if vm.streamSettings.preferredZoneUrl != nil {
+                        Button("Clear — use automatic routing") {
+                            vm.streamSettings.preferredZoneUrl = nil
+                        }
+                        .foregroundStyle(.secondary)
+                    }
+
+                    Text("Auto routing selects the zone with the best balance of ping and queue depth. Manual zone selection lets you pin a specific region.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section("Microphone") {
                     Toggle("Use Microphone", isOn: $vm.streamSettings.micEnabled)
                     Text("Enables voice chat via a connected Bluetooth headset or AirPods. Requires microphone permission.")
@@ -67,7 +94,17 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .sheet(isPresented: $showZonePicker) {
+                ZonePickerView(selectedZoneUrl: $vm.streamSettings.preferredZoneUrl)
+            }
         }
+    }
+
+    private func zoneLabel(_ url: String?) -> String {
+        guard let url else { return "Automatic" }
+        // Extract zone ID from URL like "https://np-aws-us-n-virginia-1.cloudmatchbeta.nvidiagrid.net/"
+        let host = URL(string: url)?.host ?? url
+        return host.components(separatedBy: ".").first?.uppercased() ?? url
     }
 
     private func colorQualityLabel(_ q: ColorQuality) -> String {
@@ -76,5 +113,163 @@ struct SettingsView: View {
         case .sdr10bit: return "SDR 10-bit"
         case .hdr10bit: return "HDR 10-bit"
         }
+    }
+}
+
+// MARK: - Zone Picker
+
+private struct ZonePickerView: View {
+    @Binding var selectedZoneUrl: String?
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var zones: [GFNZone] = []
+    @State private var isLoading = true
+    @State private var error: String?
+
+    private var groupedZones: [(region: String, label: String, flag: String, zones: [GFNZone])] {
+        let grouped = Dictionary(grouping: zones) { $0.region }
+        let order = ["US", "CA", "EU", "JP", "KR", "THAI", "MY"]
+        let sortedRegions = order.filter { grouped[$0] != nil }
+            + grouped.keys.filter { !order.contains($0) }.sorted()
+        return sortedRegions.map { region in
+            let meta = GFNZone.regionMeta[region] ?? (label: region, flag: "🌐")
+            return (region, meta.label, meta.flag, grouped[region, default: []])
+        }
+    }
+
+    private var autoZone: GFNZone? { zones.autoZone }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if isLoading {
+                    ProgressView("Loading servers…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let error {
+                    ContentUnavailableView("Can't Load Servers", systemImage: "wifi.exclamationmark",
+                                          description: Text(error))
+                } else {
+                    List {
+                        // Auto option
+                        Section {
+                            Button {
+                                selectedZoneUrl = nil
+                                dismiss()
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text("Automatic")
+                                            .font(.body.weight(.semibold))
+                                        if let best = autoZone {
+                                            Text("Best: \(best.id) · Q\(best.queuePosition)\(best.pingMs.map { " · \($0) ms" } ?? "")")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    Spacer()
+                                    if selectedZoneUrl == nil {
+                                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                                    }
+                                }
+                            }
+                            .foregroundStyle(.primary)
+                        }
+
+                        // Zones by region
+                        ForEach(groupedZones, id: \.region) { group in
+                            Section("\(group.flag) \(group.label)") {
+                                ForEach(group.zones) { zone in
+                                    Button {
+                                        selectedZoneUrl = zone.zoneUrl
+                                        dismiss()
+                                    } label: {
+                                        HStack {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(zone.id)
+                                                    .font(.body)
+                                                HStack(spacing: 8) {
+                                                    Label("Q \(zone.queuePosition)", systemImage: "person.3.fill")
+                                                        .foregroundStyle(queueColor(zone.queuePosition))
+                                                    if let ping = zone.pingMs {
+                                                        Label("\(ping) ms", systemImage: "wifi")
+                                                            .foregroundStyle(pingColor(ping))
+                                                    } else if zone.isMeasuring {
+                                                        Label("…", systemImage: "wifi")
+                                                            .foregroundStyle(.secondary)
+                                                    }
+                                                }
+                                                .font(.caption)
+                                            }
+                                            Spacer()
+                                            if selectedZoneUrl == zone.zoneUrl {
+                                                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                                            } else if autoZone?.id == zone.id {
+                                                Text("Best")
+                                                    .font(.caption.bold())
+                                                    .foregroundStyle(.green)
+                                                    .padding(.horizontal, 6)
+                                                    .padding(.vertical, 2)
+                                                    .background(Color.green.opacity(0.15), in: Capsule())
+                                            }
+                                        }
+                                    }
+                                    .foregroundStyle(.primary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Server Region")
+            .task {
+                await loadZones()
+            }
+        }
+    }
+
+    private func loadZones() async {
+        isLoading = true
+        error = nil
+        do {
+            zones = try await ZoneClient.shared.fetchZones()
+            isLoading = false
+            // Measure pings concurrently in batches of 6
+            let batchSize = 6
+            for start in stride(from: 0, to: zones.count, by: batchSize) {
+                let end = min(start + batchSize, zones.count)
+                let batch = zones[start..<end]
+                await withTaskGroup(of: (String, Int?).self) { group in
+                    for zone in batch {
+                        group.addTask {
+                            let ping = await ZoneClient.shared.measurePing(to: zone.zoneUrl)
+                            return (zone.id, ping)
+                        }
+                    }
+                    for await (id, ping) in group {
+                        if let idx = zones.firstIndex(where: { $0.id == id }) {
+                            zones[idx].pingMs = ping
+                            zones[idx].isMeasuring = false
+                        }
+                    }
+                }
+            }
+        } catch {
+            isLoading = false
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func queueColor(_ q: Int) -> Color {
+        if q <= 5 { return .green }
+        if q <= 15 { return .yellow }
+        if q <= 30 { return .orange }
+        return .red
+    }
+
+    private func pingColor(_ ms: Int) -> Color {
+        if ms < 30  { return .green }
+        if ms < 80  { return .yellow }
+        if ms < 150 { return .orange }
+        return .red
     }
 }

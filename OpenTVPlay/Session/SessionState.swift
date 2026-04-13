@@ -12,6 +12,9 @@ struct StreamSettings: Codable, Equatable {
     var gameLanguage: String = "en_US"
     var enableL4S: Bool = false
     var micEnabled: Bool = false
+    /// Preferred zone URL, e.g. "https://np-aws-us-n-virginia-1.cloudmatchbeta.nvidiagrid.net/"
+    /// nil = let the GFN default VPC handle routing.
+    var preferredZoneUrl: String? = nil
 }
 
 enum VideoCodec: String, Codable, CaseIterable {
@@ -37,6 +40,37 @@ struct IceServer: Codable {
     let credential: String?
 }
 
+// MARK: - Queue Ads
+
+struct SessionAdMediaFile: Codable, Equatable {
+    let mediaFileUrl: String?
+    let encodingProfile: String?
+}
+
+struct SessionAdInfo: Codable, Equatable, Identifiable {
+    let adId: String
+    let adUrl: String?
+    let mediaUrl: String?
+    let adMediaFiles: [SessionAdMediaFile]
+    let adLengthInSeconds: Double?
+    var id: String { adId }
+
+    /// Returns the best available media URL.
+    var preferredMediaURL: URL? {
+        if let url = adMediaFiles.compactMap({ $0.mediaFileUrl.flatMap(URL.init) }).first { return url }
+        if let url = adUrl.flatMap(URL.init) { return url }
+        return mediaUrl.flatMap(URL.init)
+    }
+}
+
+struct SessionAdState: Codable, Equatable {
+    let isAdsRequired: Bool
+    let isQueuePaused: Bool?
+    let gracePeriodSeconds: Int?
+    let message: String?
+    let ads: [SessionAdInfo]
+}
+
 // MARK: - Session Info (returned by CloudMatch)
 
 struct SessionInfo {
@@ -53,6 +87,7 @@ struct SessionInfo {
     let mediaConnectionInfo: MediaConnectionInfo?
     let clientId: String
     let deviceId: String
+    let adState: SessionAdState?
 }
 
 struct MediaConnectionInfo {

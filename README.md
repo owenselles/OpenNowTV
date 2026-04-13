@@ -15,7 +15,8 @@ A native GeForce NOW client for Apple TV. Stream your entire PC game library dir
 - **Library & Store** — browse your linked games separately from the full public catalog; Store has search
 - **Stream quality settings** — resolution (720p/1080p/4K), frame rate, codec (H.264/H.265/AV1), and color quality (SDR/HDR) from the Settings tab
 - **Codec-aware SDP negotiation** — offer is filtered to your chosen codec before WebRTC negotiation; H.265 prefers Main profile; bandwidth hints sent to prevent server overshoot
-- **Session queue UI** — shows queue phase ("In queue · Position X" → "Preparing your game"), 90-second timeout, and requires two consecutive ready polls before presenting the stream
+- **Session queue UI** — shows queue phase ("In queue · Position X" → "Preparing your game"), 90-second timeout, two consecutive ready polls before presenting the stream; plays mandatory queue ads via AVPlayer and reports lifecycle events back to CloudMatch
+- **Zone/region selection** — Settings → Server Region shows live queue depths and ping per zone; Automatic mode picks the best zone by weighted score (40% ping + 60% queue depth); powered by the PrintedWaste community API
 - **Microphone support** — voice chat via AirPods or any Bluetooth headset; toggle in Settings; permission requested on first use
 - **Favorites** — heart any game in your Library; persisted locally
 - **Full GFN streaming** — WebRTC-based, up to 4K@60fps (subject to your GFN subscription tier)
@@ -108,16 +109,14 @@ The GFN streaming protocol was reverse-engineered by [OpenNOW](https://github.co
 ## Known Limitations
 
 - **No App Store.** NVIDIA has not published a public API for third-party GFN clients. Sideloading only.
-- **No ad/queue ad handling.** During high demand GFN may show ads while in queue. The app displays queue position but skips ad playback.
-- **No zone/region selection.** Sessions always use the default zone. Region routing requires zone discovery from the GFN API (not yet implemented).
+- **Queue ad playback.** During high demand GFN shows ads while in queue. The app plays them via AVPlayer and reports lifecycle events (start/pause/finish) back to CloudMatch.
+- **Zone/region selection.** Settings → Server Region lets you pick a specific zone or leave it on Automatic (40% ping + 60% queue depth scoring). Zone list + queue depths fetched from the PrintedWaste community API.
 - **AV1 partial reliability not fully ported.** The input data channel uses reliable ordered delivery; the partially-reliable gamepad channel from OpenNOW's `sdp.ts` is not yet implemented.
 
 ## Contributing
 
 PRs welcome, especially for:
 
-- Zone/region discovery and selection UI
-- Session queue ad playback
 - AV1 partial-reliability input data channel
 - macOS Catalyst or visionOS port
 
@@ -133,5 +132,6 @@ MIT — see [LICENSE](LICENSE).
 
 ## Acknowledgements
 
-- [OpenNOW](https://github.com/OpenCloudGaming/OpenNOW) — GFN protocol reverse engineering
+- [OpenNOW](https://github.com/OpenCloudGaming/OpenNOW) — GFN protocol reverse engineering; the [iOS branch](https://github.com/OpenCloudGaming/OpenNOW/tree/kief5555/ios) informed the queue ad playback and zone selection implementation
+- [PrintedWaste](https://printedwaste.com) — community API for GFN zone queue depths and region mapping
 - [livekit/webrtc-xcframework](https://github.com/livekit/webrtc-xcframework) — WebRTC for Apple platforms

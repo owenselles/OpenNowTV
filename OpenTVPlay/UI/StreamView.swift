@@ -19,6 +19,8 @@ struct StreamView: View {
     @State private var loadingPhase: LoadingPhase = .finding
     @State private var createdSession: SessionInfo?
     @State private var sessionToken: String?
+    // Per-ad state tracking to avoid duplicate reports
+    @State private var adReportedAction: [String: AdAction] = [:]
 
     private let cloudMatchClient = CloudMatchClient()
 
@@ -70,6 +72,22 @@ struct StreamView: View {
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .animation(.easeInOut, value: loadingPhase)
+
+            // Show ad player when GFN requires watching an ad to stay in queue
+            if let adState = createdSession?.adState,
+               adState.isAdsRequired,
+               let ad = adState.ads.first {
+                QueueAdPlayerView(
+                    ad: ad,
+                    onStart:  { id in reportAd(id: id, action: .start)  },
+                    onPause:  { id in reportAd(id: id, action: .pause)  },
+                    onResume: { id in reportAd(id: id, action: .resume) },
+                    onFinish: { id, ms in reportAd(id: id, action: .finish, watchedMs: ms) },
+                    message:  adState.message
+                )
+                .frame(maxWidth: 560)
+            }
+
             HStack(spacing: 24) {
                 if case .timedOut = loadingPhase {
                     Button("Retry") { Task { await startSession() } }
@@ -206,12 +224,15 @@ struct StreamView: View {
 
             guard let appId = game.variants.first?.appId ?? game.variants.first?.id else { return }
 
+            // Prefer the user-selected zone URL; fall back to the provider's default.
+            let sessionBase = settings.preferredZoneUrl ?? base
+
             let request = SessionCreateRequest(
                 appId: appId,
                 internalTitle: game.title,
                 token: token,
                 zone: "",
-                streamingBaseUrl: base,
+                streamingBaseUrl: sessionBase,
                 settings: settings,
                 accountLinked: true
             )
@@ -276,6 +297,26 @@ struct StreamView: View {
         }
         streamController.disconnect()
         onDismiss()
+    }
+
+    private func reportAd(id: String, action: AdAction, watchedMs: Int? = nil) {
+        // Prevent duplicate reports for the same action on the same ad
+        guard adReportedAction[id] != action else { return }
+        adReportedAction[id] = action
+        guard let session = createdSession, let token = sessionToken else { return }
+        Task {
+            await cloudMatchClient.reportAdEvent(
+                sessionId: session.sessionId,
+                token: token,
+                base: session.streamingBaseUrl,
+                serverIp: session.serverIp.isEmpty ? nil : session.serverIp,
+                clientId: session.clientId,
+                deviceId: session.deviceId,
+                adId: id,
+                action: action,
+                watchedTimeMs: watchedMs
+            )
+        }
     }
 
     private func toggleOverlay() {
