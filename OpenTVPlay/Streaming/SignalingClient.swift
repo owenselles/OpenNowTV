@@ -18,10 +18,12 @@ enum SignalingEvent {
 // upgrade handshake and RFC 6455 framing automatically.
 //
 // Key points:
-//  • NWEndpoint.url(_:) with ws:// (not wss://) passes path+query to the upgrade GET request
-//    without triggering NWConnection's own TLS layer (we add TLS manually via NWParameters).
+//  • NWProtocolWebSocket always uses HTTP/1.1 WebSocket (not HTTP/2 / RFC 8441).
+//    URLSessionWebSocketTask would negotiate h2 ALPN and attempt RFC 8441, which the
+//    GFN signaling server does not support — hence we stay on NWConnection.
 //  • No ALPN is set in TLS options — GFN's WebSocket server doesn't register any ALPN token.
-//  • .legacy cipher suite group + min TLS 1.0 allows older/RSA-based cipher negotiation.
+//  • No cipher suite group restriction — system defaults include TLS 1.3 which the server requires.
+//    (The old .legacy group excluded TLS 1.3 and caused HANDSHAKE_FAILURE_ON_CLIENT_HELLO.)
 //  • Certificate validation is bypassed (mirrors OpenNOW rejectUnauthorized:false).
 //  • Old heartbeat/receive tasks are cancelled at connect() entry to prevent zombie writes.
 
@@ -70,10 +72,10 @@ final class GFNSignalingClient {
         let port = url.port ?? 443
         let useTLS = url.scheme == "wss" || url.scheme == "https"
 
-        // TLS options — no ALPN, legacy cipher suites, cert bypass.
+        // TLS options — no cipher group restriction (system defaults include TLS 1.3),
+        // min TLS 1.2, no ALPN, cert bypass.
         let tlsOpts = NWProtocolTLS.Options()
-        sec_protocol_options_append_tls_ciphersuite_group(tlsOpts.securityProtocolOptions, .legacy)
-        sec_protocol_options_set_min_tls_protocol_version(tlsOpts.securityProtocolOptions, .TLSv10)
+        sec_protocol_options_set_min_tls_protocol_version(tlsOpts.securityProtocolOptions, .TLSv12)
         sec_protocol_options_set_verify_block(tlsOpts.securityProtocolOptions,
                                               { _, _, complete in complete(true) },
                                               .global(qos: .userInitiated))
@@ -81,8 +83,10 @@ final class GFNSignalingClient {
         // WebSocket options — system handles HTTP upgrade, framing, and ping/pong.
         let wsOpts = NWProtocolWebSocket.Options()
         wsOpts.autoReplyPing = true
+        // Register GFN session subprotocol — server echoes x-nv-sessionid.{id} in its 101;
+        // RFC 6455 §4.1 requires we offer it or NWProtocolWebSocket aborts (ECONNABORTED).
+        wsOpts.setSubprotocols(["x-nv-sessionid.\(sessionId)"])
         wsOpts.setAdditionalHeaders([
-            ("Sec-WebSocket-Protocol", "x-nv-sessionid.\(sessionId)"),
             ("Origin", "https://play.geforcenow.com"),
             ("User-Agent", NVIDIAAuth.userAgent),
         ])
@@ -96,17 +100,10 @@ final class GFNSignalingClient {
         }
         params.defaultProtocolStack.applicationProtocols.insert(wsOpts, at: 0)
 
-        // Use NWEndpoint.url so the path+query go into the WebSocket upgrade request.
-        // Fall back to host:port endpoint if the URL can't be used (non-wss scheme etc.)
-        let endpoint: NWEndpoint
-        if let wsUrl = makeWebSocketURL(from: requestUrl) {
-            endpoint = NWEndpoint.url(wsUrl)
-        } else {
-            endpoint = NWEndpoint.hostPort(
-                host: NWEndpoint.Host(host),
-                port: NWEndpoint.Port(rawValue: UInt16(port))!
-            )
-        }
+        // NWEndpoint.url passes the full path+query into the WebSocket HTTP upgrade GET.
+        // wss:// here is correct: NWParameters(tls:) configures the single TLS layer;
+        // it does not add a second one. Using ws:// was a misdiagnosis.
+        let endpoint = NWEndpoint.url(requestUrl)
 
         let conn = NWConnection(to: endpoint, using: params)
         connection = conn
@@ -337,16 +334,6 @@ final class GFNSignalingClient {
         return ackCounter
     }
 
-    // MARK: Private — URL helpers
-
-    /// NWEndpoint.url with a wss:// URL causes NWConnection to add its own TLS layer,
-    /// which would conflict with our explicit NWParameters(tls:).  Use ws:// instead so
-    /// NWConnection does not auto-add TLS; our params provide TLS with custom options.
-    private func makeWebSocketURL(from url: URL) -> URL? {
-        guard var comps = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
-        if comps.scheme == "wss" { comps.scheme = "ws" }
-        return comps.url
-    }
 }
 
 // MARK: - Errors

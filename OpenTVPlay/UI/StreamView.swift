@@ -338,7 +338,7 @@ struct StreamView: View {
 
             await streamController.connect(session: sessionInfo, settings: settings)
         } catch {
-            // error will propagate to streamController.state via connect()
+            streamController.fail(with: error.localizedDescription)
         }
     }
 

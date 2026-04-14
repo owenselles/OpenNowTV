@@ -84,6 +84,12 @@ final class GFNStreamController: NSObject {
         }
     }
 
+    // MARK: Fail (external error surfacing)
+
+    func fail(with message: String) {
+        state = .failed(message: message)
+    }
+
     // MARK: Disconnect
 
     func disconnect() {
