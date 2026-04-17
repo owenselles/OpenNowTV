@@ -48,6 +48,8 @@ final class GFNStreamController: NSObject {
     private var inputDataChannel: LKRTCDataChannel?
     private var signaling: GFNSignalingClient?
     private var inputSender: InputSender?
+    private(set) var videoView: VideoSurfaceView?
+    private(set) var remoteMode: RemoteInputMode = .mouse
     private var statsTimer: Timer?
     private var protocolVersion = 2
     private var partialReliableThresholdMs = 300
@@ -90,6 +92,26 @@ final class GFNStreamController: NSObject {
         }
     }
 
+    // MARK: Video View Binding
+
+    /// Called by VideoSurfaceViewRepresentable once the UIView is created.
+    /// Stores a reference so the inputHandler can be wired up when InputSender starts.
+    func bindVideoView(_ view: VideoSurfaceView) {
+        videoView = view
+        view.inputHandler = inputSender
+    }
+
+    // MARK: Input Control
+
+    func toggleRemoteMode() {
+        inputSender?.toggleRemoteMode()
+        remoteMode = inputSender?.remoteMode ?? .mouse
+    }
+
+    func setInputPaused(_ paused: Bool) {
+        inputSender?.isPaused = paused
+    }
+
     // MARK: Fail (external error surfacing)
 
     func fail(with message: String) {
@@ -117,6 +139,9 @@ final class GFNStreamController: NSObject {
         inputReady = false
         lastBytesReceived = 0
         lastStatsTime = .distantPast
+        videoView?.inputHandler = nil
+        videoView = nil
+        remoteMode = .mouse
         state = .idle
     }
 
@@ -651,6 +676,8 @@ extension GFNStreamController: LKRTCDataChannelDelegate {
             sender.setProtocolVersion(version)
             sender.start()
             self.inputSender = sender
+            // Forward keyboard/mouse events from the video surface to the sender
+            self.videoView?.inputHandler = sender
         }
     }
 }

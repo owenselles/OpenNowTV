@@ -110,7 +110,7 @@ struct StreamView: View {
             if let pos { return "In queue · Position \(pos)" }
             return "In queue…"
         case .preparing:
-            return "Preparing your game…"
+            return "Preparing your game… This can take a minute"
         case .timedOut:
             return "Server took too long to respond."
         }
@@ -162,6 +162,17 @@ struct StreamView: View {
             if !streamController.stats.gpuType.isEmpty {
                 Label(streamController.stats.gpuType, systemImage: "cpu")
             }
+            Divider().overlay(.white.opacity(0.4))
+            Button {
+                streamController.toggleRemoteMode()
+            } label: {
+                Label(
+                    streamController.remoteMode == .mouse ? "Remote: Mouse" : "Remote: Gamepad",
+                    systemImage: streamController.remoteMode == .mouse ? "cursorarrow" : "gamecontroller"
+                )
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.white.opacity(0.8))
         }
         .font(.caption.weight(.medium))
         .foregroundStyle(.white)
@@ -380,9 +391,13 @@ struct StreamView: View {
     private func toggleOverlay() {
         overlayTimer?.invalidate()
         showOverlay.toggle()
+        // Pause input forwarding while the overlay is visible so swipes don't move
+        // the game cursor and keyboard shortcuts don't reach the game accidentally.
+        streamController.setInputPaused(showOverlay)
         if showOverlay {
             overlayTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { _ in
                 withAnimation { showOverlay = false }
+                streamController.setInputPaused(false)
             }
         }
     }
