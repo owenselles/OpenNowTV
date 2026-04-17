@@ -1,11 +1,15 @@
 # OpenNowTV
 
-A native GeForce NOW client for Apple TV. Stream your entire PC game library directly on tvOS with full controller support — no browser, no workarounds.
+A native GeForce NOW client for Apple TV. Stream your entire PC game library directly on tvOS with full controller support, no browser, no workarounds.
 
 > **Personal use / sideload only.** This project is not affiliated with, endorsed by, or sponsored by NVIDIA. NVIDIA and GeForce NOW are trademarks of NVIDIA Corporation.
 
 > [!WARNING]
 > OpenNowTV is under active development. Expect bugs, lots of them
+
+
+
+
 ---
 
 ## Features
