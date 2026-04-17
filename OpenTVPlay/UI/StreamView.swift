@@ -14,9 +14,10 @@ struct StreamView: View {
     let onDismiss: () -> Void
 
     @Environment(AuthManager.self) var authManager
+    @Environment(GamesViewModel.self) var viewModel
     @State private var streamController = GFNStreamController()
     @State private var showOverlay = false
-    @State private var overlayTimer: Timer?
+    @State private var showExitConfirmation = false
     @State private var loadingPhase: LoadingPhase = .finding
     @State private var createdSession: SessionInfo?
     @State private var sessionToken: String?
@@ -127,62 +128,93 @@ struct StreamView: View {
                 .ignoresSafeArea()
 
             if showOverlay {
-                statsOverlay
+                pauseMenu
                     .transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.2), value: showOverlay)
+        .alert("Exit Game?", isPresented: $showExitConfirmation) {
+            Button("Exit", role: .destructive) { disconnect() }
+            Button("Keep Playing", role: .cancel) { }
+        } message: {
+            Text("Your session will end and progress will be saved in-game.")
+        }
     }
 
-    // MARK: Stats Overlay
+    // MARK: Pause Menu
 
-    private var statsOverlay: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            metricRow(
-                icon: "network",
-                label: "RTT",
-                value: "\(Int(streamController.stats.rttMs)) ms",
-                history: streamController.pingHistory,
-                color: pingColor(streamController.stats.rttMs)
-            )
-            metricRow(
-                icon: "speedometer",
-                label: "FPS",
-                value: "\(Int(streamController.stats.fps))",
-                history: streamController.fpsHistory,
-                color: fpsColor(streamController.stats.fps)
-            )
-            metricRow(
-                icon: "wifi",
-                label: "Bitrate",
-                value: "\(streamController.stats.bitrateKbps / 1000) Mbps",
-                history: streamController.bitrateHistory,
-                color: .cyan
-            )
-            Divider().overlay(.white.opacity(0.4))
-            Label("\(streamController.stats.resolutionWidth)×\(streamController.stats.resolutionHeight) @ \(Int(streamController.stats.fps))fps", systemImage: "tv")
-            Label("Loss \(String(format: "%.1f", streamController.stats.packetLossPercent))%", systemImage: "arrow.triangle.2.circlepath")
-            if !streamController.stats.gpuType.isEmpty {
-                Label(streamController.stats.gpuType, systemImage: "cpu")
+    private var pauseMenu: some View {
+        HStack(alignment: .top, spacing: 40) {
+            // Actions
+            VStack(spacing: 16) {
+                Button {
+                    toggleOverlay()
+                } label: {
+                    Label("Resume", systemImage: "play.fill")
+                        .frame(minWidth: 180)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
+
+                Button {
+                    streamController.toggleRemoteMode()
+                } label: {
+                    Label(
+                        streamController.remoteMode == .mouse ? "Remote: Mouse" : "Remote: Gamepad",
+                        systemImage: streamController.remoteMode == .mouse ? "cursorarrow" : "gamecontroller"
+                    )
+                    .frame(minWidth: 180)
+                }
+                .buttonStyle(.bordered)
+                .tint(.white)
+
+                Button(role: .destructive) {
+                    showExitConfirmation = true
+                } label: {
+                    Label("Exit Game", systemImage: "xmark.circle")
+                        .frame(minWidth: 180)
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
             }
-            Divider().overlay(.white.opacity(0.4))
-            Button {
-                streamController.toggleRemoteMode()
-            } label: {
-                Label(
-                    streamController.remoteMode == .mouse ? "Remote: Mouse" : "Remote: Gamepad",
-                    systemImage: streamController.remoteMode == .mouse ? "cursorarrow" : "gamecontroller"
+
+            // Live stats
+            VStack(alignment: .leading, spacing: 10) {
+                metricRow(
+                    icon: "network",
+                    label: "RTT",
+                    value: "\(Int(streamController.stats.rttMs)) ms",
+                    history: streamController.pingHistory,
+                    color: pingColor(streamController.stats.rttMs)
                 )
+                metricRow(
+                    icon: "speedometer",
+                    label: "FPS",
+                    value: "\(Int(streamController.stats.fps))",
+                    history: streamController.fpsHistory,
+                    color: fpsColor(streamController.stats.fps)
+                )
+                metricRow(
+                    icon: "wifi",
+                    label: "Bitrate",
+                    value: "\(streamController.stats.bitrateKbps / 1000) Mbps",
+                    history: streamController.bitrateHistory,
+                    color: .cyan
+                )
+                Divider().overlay(.white.opacity(0.4))
+                Label("\(streamController.stats.resolutionWidth)×\(streamController.stats.resolutionHeight) @ \(Int(streamController.stats.fps))fps", systemImage: "tv")
+                Label("Loss \(String(format: "%.1f", streamController.stats.packetLossPercent))%", systemImage: "arrow.triangle.2.circlepath")
+                if !streamController.stats.gpuType.isEmpty {
+                    Label(streamController.stats.gpuType, systemImage: "cpu")
+                }
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.white.opacity(0.8))
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.white)
         }
-        .font(.caption.weight(.medium))
-        .foregroundStyle(.white)
-        .padding(16)
-        .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(40)
+        .padding(32)
+        .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 16))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .padding(60)
     }
 
     private func metricRow(icon: String, label: String, value: String, history: [Double], color: Color) -> some View {
@@ -350,6 +382,7 @@ struct StreamView: View {
                 createdSession = sessionInfo
             }
 
+            viewModel.recordPlayed(game)
             await streamController.connect(session: sessionInfo, settings: settings)
         } catch {
             streamController.fail(with: error.localizedDescription)
@@ -392,16 +425,9 @@ struct StreamView: View {
     }
 
     private func toggleOverlay() {
-        overlayTimer?.invalidate()
         showOverlay.toggle()
         // Pause input forwarding while the overlay is visible so swipes don't move
         // the game cursor and keyboard shortcuts don't reach the game accidentally.
         streamController.setInputPaused(showOverlay)
-        if showOverlay {
-            overlayTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { _ in
-                withAnimation { showOverlay = false }
-                streamController.setInputPaused(false)
-            }
-        }
     }
 }

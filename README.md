@@ -19,7 +19,7 @@ A native GeForce NOW client for Apple TV. Stream your entire PC game library dir
 - **Zone/region selection** — Settings → Server Region shows live queue depths and ping per zone; Automatic mode picks the best zone by weighted score (40% ping + 60% queue depth); powered by the PrintedWaste community API
 - **Microphone support** — voice chat via AirPods or any Bluetooth headset; toggle in Settings; permission requested on first use
 - **Favorites** — heart any game in your Library; persisted locally
-- **Full GFN streaming** — WebRTC-based, up to 4K@60fps (subject to your GFN subscription tier)
+- **Full GFN streaming** — WebRTC-based, up to 4K@60fps or 1080p@120fps depending on your GFN plan
 - **Controller support** — up to 4 simultaneous MFi/Xbox/PlayStation controllers via the GameController framework
 - **NVIDIA OAuth login** — device flow; TV shows a QR code and PIN; complete sign-in on any phone, tablet, or computer
 - **Live stats overlay** — bitrate, resolution, FPS, RTT, real packet loss % — toggle with the Menu button

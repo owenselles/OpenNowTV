@@ -23,9 +23,16 @@ struct MainTabView: View {
         .environment(viewModel)
         .task { await viewModel.load(authManager: authManager) }
         .onChange(of: viewModel.streamSettings) { viewModel.saveSettings() }
+        .onChange(of: gameToPlay) { _, new in
+            // Refresh active sessions when the user exits a game
+            if new == nil {
+                Task { await viewModel.refreshActiveSessions(authManager: authManager) }
+            }
+        }
         .fullScreenCover(item: $gameToPlay) { game in
             StreamView(game: game, settings: viewModel.streamSettings, onDismiss: { gameToPlay = nil })
                 .environment(authManager)
+                .environment(viewModel)
         }
     }
 }

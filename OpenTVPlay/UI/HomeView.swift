@@ -4,6 +4,7 @@ struct HomeView: View {
     let onPlay: (GameInfo) -> Void
 
     @Environment(GamesViewModel.self) var viewModel
+    @Environment(AuthManager.self) var authManager
 
     var body: some View {
         ZStack {
@@ -24,19 +25,22 @@ struct HomeView: View {
                         .padding(.bottom, 60)
                     }
                 }
-            } else if viewModel.continuePlaying.isEmpty && viewModel.favoriteGames.isEmpty {
+            } else if viewModel.continuePlaying.isEmpty && viewModel.recentlyPlayedGames.isEmpty && viewModel.favoriteGames.isEmpty {
                 emptyState
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        // Hero banner: first active session game
-                        if let hero = viewModel.continuePlaying.first ?? viewModel.favoriteGames.first {
+                        // Hero banner: first active session → recently played → favorite
+                        if let hero = viewModel.continuePlaying.first ?? viewModel.recentlyPlayedGames.first ?? viewModel.favoriteGames.first {
                             heroBanner(hero)
                         }
 
                         VStack(alignment: .leading, spacing: 48) {
                             if !viewModel.continuePlaying.isEmpty {
                                 gameRow(title: "Continue Playing", games: viewModel.continuePlaying)
+                            }
+                            if !viewModel.recentlyPlayedGames.isEmpty {
+                                gameRow(title: "Recently Played", games: viewModel.recentlyPlayedGames)
                             }
                             if !viewModel.favoriteGames.isEmpty {
                                 gameRow(title: "Favorites", games: viewModel.favoriteGames)
@@ -47,6 +51,9 @@ struct HomeView: View {
                     }
                 }
             }
+        }
+        .onAppear {
+            Task { await viewModel.refreshActiveSessions(authManager: authManager) }
         }
     }
 

@@ -112,7 +112,7 @@ struct ActiveSessionInfo: Decodable {
 
 // MARK: - Games
 
-struct GameInfo: Identifiable {
+struct GameInfo: Identifiable, Equatable {
     let id: String
     let title: String
     let boxArtUrl: String?
@@ -121,7 +121,7 @@ struct GameInfo: Identifiable {
     var variants: [GameVariant]
 }
 
-struct GameVariant {
+struct GameVariant: Equatable {
     let id: String
     let appStore: String
     var appId: String?

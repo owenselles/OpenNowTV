@@ -11,6 +11,7 @@ class GamesViewModel {
     var libraryError: String?
 
     var favoriteIds: Set<String> = []
+    var recentlyPlayedIds: [String] = []
     var streamSettings: StreamSettings = StreamSettings()
 
     private let gamesClient = GamesClient()
@@ -20,6 +21,10 @@ class GamesViewModel {
         if let data = UserDefaults.standard.data(forKey: "gfn.favoriteIds"),
            let ids = try? JSONDecoder().decode([String].self, from: data) {
             self.favoriteIds = Set(ids)
+        }
+        if let data = UserDefaults.standard.data(forKey: "gfn.recentlyPlayed"),
+           let ids = try? JSONDecoder().decode([String].self, from: data) {
+            self.recentlyPlayedIds = ids
         }
         if let data = UserDefaults.standard.data(forKey: "gfn.streamSettings"),
            let settings = try? JSONDecoder().decode(StreamSettings.self, from: data) {
@@ -41,6 +46,13 @@ class GamesViewModel {
 
     var favoriteGames: [GameInfo] {
         mainGames.filter { favoriteIds.contains($0.id) }
+    }
+
+    var recentlyPlayedGames: [GameInfo] {
+        let activeIds = Set(continuePlaying.map { $0.id })
+        return recentlyPlayedIds.compactMap { id in
+            mainGames.first { $0.id == id && !activeIds.contains($0.id) }
+        }
     }
 
     // MARK: Load
@@ -70,6 +82,23 @@ class GamesViewModel {
             self.error = error.localizedDescription
         }
         isLoading = false
+    }
+
+    func refreshActiveSessions(authManager: AuthManager) async {
+        guard let token = try? await authManager.resolveToken() else { return }
+        let streamingUrl = authManager.session?.provider.streamingServiceUrl ?? NVIDIAAuth.defaultStreamingUrl
+        let base = streamingUrl.hasSuffix("/") ? String(streamingUrl.dropLast()) : streamingUrl
+        activeSessions = (try? await cloudMatchClient.getActiveSessions(token: token, base: base)) ?? []
+    }
+
+    // MARK: Recently Played
+
+    func recordPlayed(_ game: GameInfo) {
+        recentlyPlayedIds.removeAll { $0 == game.id }
+        recentlyPlayedIds.insert(game.id, at: 0)
+        if recentlyPlayedIds.count > 10 { recentlyPlayedIds = Array(recentlyPlayedIds.prefix(10)) }
+        let data = try? JSONEncoder().encode(recentlyPlayedIds)
+        UserDefaults.standard.set(data, forKey: "gfn.recentlyPlayed")
     }
 
     // MARK: Favorites
