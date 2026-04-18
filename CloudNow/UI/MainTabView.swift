@@ -6,6 +6,10 @@ struct MainTabView: View {
     @State private var gameToPlay: GameInfo?
     @State private var sessionToResume: ActiveSessionInfo? = nil
     @State private var directSessionToResume: SessionInfo? = nil
+    #if os(visionOS)
+    @Environment(\.openImmersiveSpace) var openImmersiveSpace
+    @Environment(\.dismissImmersiveSpace) var dismissImmersiveSpace
+    #endif
 
     var body: some View {
         TabView {
@@ -47,6 +51,23 @@ struct MainTabView: View {
                 Task { await viewModel.refreshActiveSessions(authManager: authManager) }
             }
         }
+        #if os(visionOS)
+        // On visionOS, open a full ImmersiveSpace instead of a modal cover.
+        // pendingGame/pendingSession are read by ImmersiveStreamView inside the space.
+        .onChange(of: gameToPlay) { _, game in
+            guard let game else { return }
+            viewModel.pendingGame = game
+            viewModel.pendingSession = sessionToResume
+            Task { await openImmersiveSpace(id: "stream") }
+        }
+        // When ImmersiveStreamView clears pendingGame on dismiss, sync gameToPlay back to nil.
+        .onChange(of: viewModel.pendingGame) { _, pending in
+            if pending == nil {
+                gameToPlay = nil
+                sessionToResume = nil
+            }
+        }
+        #else
         .fullScreenCover(item: $gameToPlay) { game in
             StreamView(
                 game: game,
@@ -68,5 +89,6 @@ struct MainTabView: View {
             .environment(authManager)
             .environment(viewModel)
         }
+        #endif
     }
 }

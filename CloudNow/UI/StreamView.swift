@@ -218,8 +218,9 @@ struct StreamView: View {
                 } label: {
                     Label("End Session", systemImage: "xmark.circle")
                         .frame(minWidth: 180)
+                        .foregroundStyle(.white)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
                 .tint(.red)
             }
 

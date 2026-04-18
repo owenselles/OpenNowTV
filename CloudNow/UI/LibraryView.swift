@@ -86,6 +86,8 @@ struct LibraryView: View {
                     .aspectRatio(2/3, contentMode: .fit)
                     #if os(tvOS)
                     .buttonStyle(.card)
+                    #else
+                    .buttonStyle(.plain)
                     #endif
                     .contextMenu {
                         Button {
@@ -218,6 +220,8 @@ struct GameCardView: View {
         }
         #if os(tvOS)
         .buttonStyle(.card)
+        #else
+        .buttonStyle(.plain)
         #endif
     }
 }
@@ -236,6 +240,8 @@ struct LibraryCardView: View {
         }
         #if os(tvOS)
         .buttonStyle(.card)
+        #else
+        .buttonStyle(.plain)
         #endif
     }
 }
