@@ -85,10 +85,12 @@ struct LibraryView: View {
                     } label: {
                         GameCardLabel(game: game)
                     }
+                    #if os(tvOS)
                     .buttonStyle(.card)
+                    #endif
                     .contextMenu {
                         Button {
-                            viewModel.toggleFavorite(game)
+                            viewModel.toggleFavorite(game.id)
                         } label: {
                             let isFav = viewModel.favoriteIds.contains(game.id)
                             Label(
@@ -184,7 +186,9 @@ struct GameCardView: View {
         Button(action: onPlay) {
             GameCardLabel(game: game)
         }
+        #if os(tvOS)
         .buttonStyle(.card)
+        #endif
     }
 }
 
@@ -200,6 +204,8 @@ struct LibraryCardView: View {
         Button(action: onPlay) {
             GameCardLabel(game: game)
         }
+        #if os(tvOS)
         .buttonStyle(.card)
+        #endif
     }
 }

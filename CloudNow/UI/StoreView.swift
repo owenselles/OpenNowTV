@@ -88,11 +88,13 @@ struct StoreView: View {
                         } label: {
                             StoreCardLabel(game: game)
                         }
+                        #if os(tvOS)
                         .buttonStyle(.card)
+                        #endif
                         .contextMenu {
                             if game.isInLibrary {
                                 Button {
-                                    viewModel.toggleFavorite(game)
+                                    viewModel.toggleFavorite(game.id)
                                 } label: {
                                     let isFav = viewModel.favoriteIds.contains(game.id)
                                     Label(
