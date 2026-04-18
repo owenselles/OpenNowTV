@@ -84,7 +84,9 @@ struct LibraryView: View {
                         GameCardLabel(game: game)
                     }
                     .aspectRatio(2/3, contentMode: .fit)
+                    #if os(tvOS)
                     .buttonStyle(.card)
+                    #endif
                     .contextMenu {
                         Button {
                             viewModel.toggleFavorite(game.id)
@@ -214,7 +216,9 @@ struct GameCardView: View {
         Button(action: onPlay) {
             GameCardLabel(game: game)
         }
+        #if os(tvOS)
         .buttonStyle(.card)
+        #endif
     }
 }
 
@@ -230,6 +234,8 @@ struct LibraryCardView: View {
         Button(action: onPlay) {
             GameCardLabel(game: game)
         }
+        #if os(tvOS)
         .buttonStyle(.card)
+        #endif
     }
 }
