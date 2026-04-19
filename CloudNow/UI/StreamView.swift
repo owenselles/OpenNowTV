@@ -13,6 +13,8 @@ struct StreamView: View {
     var settings: StreamSettings = StreamSettings()
     var existingSession: ActiveSessionInfo? = nil
     let onDismiss: () -> Void
+    /// Called when the user leaves without ending the session so the caller can offer a resume.
+    var onLeave: ((GameInfo, SessionInfo) -> Void)? = nil
 
     @Environment(AuthManager.self) var authManager
     @Environment(GamesViewModel.self) var viewModel
@@ -466,6 +468,9 @@ struct StreamView: View {
     // Leaves the stream locally without stopping the server session.
     // GFN keeps the session alive for ~1–2 minutes so it can be resumed from home.
     private func leave() {
+        if let session = createdSession {
+            onLeave?(game, session)
+        }
         streamController.disconnect()
         onDismiss()
     }

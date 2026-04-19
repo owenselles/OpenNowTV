@@ -9,16 +9,26 @@ struct MainTabView: View {
     var body: some View {
         TabView {
             Tab("Home", systemImage: "house.fill") {
-                HomeView(onPlay: { game in
-                    // If this game has an active session, set it up for resume
-                    sessionToResume = viewModel.activeSessions.first { session in
-                        game.variants.contains { v in
-                            guard let appId = v.appId, let sessionAppId = session.appId else { return false }
-                            return appId == sessionAppId
+                HomeView(
+                    onPlay: { game in
+                        // Prefer a locally-stored resumable session over the server-side list
+                        if let rs = viewModel.resumableSession, !rs.isExpired, rs.game.id == game.id {
+                            sessionToResume = rs.asActiveSessionInfo
+                        } else {
+                            sessionToResume = viewModel.activeSessions.first { session in
+                                game.variants.contains { v in
+                                    guard let appId = v.appId, let sessionAppId = session.appId else { return false }
+                                    return appId == sessionAppId
+                                }
+                            }
                         }
+                        gameToPlay = game
+                    },
+                    onResume: { rs in
+                        sessionToResume = rs.asActiveSessionInfo
+                        gameToPlay = rs.game
                     }
-                    gameToPlay = game
-                })
+                )
             }
             Tab("Library", systemImage: "books.vertical.fill") {
                 LibraryView(games: viewModel.libraryGames, onPlay: { gameToPlay = $0 })
@@ -47,6 +57,15 @@ struct MainTabView: View {
                 onDismiss: {
                     gameToPlay = nil
                     sessionToResume = nil
+                    viewModel.resumableSession = nil
+                },
+                onLeave: { leftGame, session in
+                    viewModel.resumableSession = ResumableSession(
+                        game: leftGame,
+                        sessionId: session.sessionId,
+                        serverIp: session.serverIp,
+                        leftAt: Date()
+                    )
                 }
             )
             .environment(authManager)

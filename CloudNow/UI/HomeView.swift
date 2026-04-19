@@ -2,9 +2,11 @@ import SwiftUI
 
 struct HomeView: View {
     let onPlay: (GameInfo) -> Void
+    let onResume: (ResumableSession) -> Void
 
     @Environment(GamesViewModel.self) var viewModel
     @Environment(AuthManager.self) var authManager
+    @State private var now = Date()
 
     var body: some View {
         ZStack {
@@ -25,13 +27,15 @@ struct HomeView: View {
                         .padding(.bottom, 60)
                     }
                 }
-            } else if viewModel.continuePlaying.isEmpty && viewModel.recentlyPlayedGames.isEmpty && viewModel.favoriteGames.isEmpty {
+            } else if viewModel.continuePlaying.isEmpty && viewModel.recentlyPlayedGames.isEmpty && viewModel.favoriteGames.isEmpty && activeResumable == nil {
                 emptyState
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        // Hero banner: first active session → recently played → favorite
-                        if let hero = viewModel.continuePlaying.first ?? viewModel.recentlyPlayedGames.first ?? viewModel.favoriteGames.first {
+                        // Hero banner: resumable → active session → recently played → favorite
+                        if let rs = activeResumable {
+                            resumeBanner(rs)
+                        } else if let hero = viewModel.continuePlaying.first ?? viewModel.recentlyPlayedGames.first ?? viewModel.favoriteGames.first {
                             heroBanner(hero)
                         }
 
@@ -54,6 +58,69 @@ struct HomeView: View {
         }
         .onAppear {
             Task { await viewModel.refreshActiveSessions(authManager: authManager) }
+        }
+        // Tick every second so the countdown stays live and we expire on time
+        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { t in
+            now = t
+            if viewModel.resumableSession?.isExpired == true {
+                viewModel.resumableSession = nil
+            }
+        }
+    }
+
+    private var activeResumable: ResumableSession? {
+        guard let rs = viewModel.resumableSession, !rs.isExpired else { return nil }
+        return rs
+    }
+
+    // MARK: Resume Banner
+
+    private func resumeBanner(_ rs: ResumableSession) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            AsyncImage(url: rs.game.heroBannerUrl.flatMap { URL(string: $0) }) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().aspectRatio(contentMode: .fill)
+                case .failure, .empty:
+                    Rectangle().fill(Color.gray.opacity(0.2))
+                @unknown default:
+                    Color.gray.opacity(0.2)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 420)
+            .clipped()
+            .overlay(LinearGradient(
+                colors: [.black.opacity(0.8), .clear, .black.opacity(0.4)],
+                startPoint: .bottom, endPoint: .top
+            ))
+
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 10) {
+                        Text(rs.game.title)
+                            .font(.largeTitle.weight(.bold))
+                            .foregroundStyle(.white)
+                            .shadow(radius: 4)
+                        Text("SESSION ACTIVE")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(.green, in: Capsule())
+                    }
+                    Text("Session expires in \(rs.secondsRemaining)s — tap to jump back in")
+                        .font(.callout)
+                        .foregroundStyle(.white.opacity(0.8))
+                    Button { onResume(rs) } label: {
+                        Label("Rejoin Session", systemImage: "arrow.counterclockwise")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                }
+                Spacer()
+            }
+            .padding(60)
         }
     }
 
