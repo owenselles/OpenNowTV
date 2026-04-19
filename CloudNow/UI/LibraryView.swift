@@ -40,36 +40,34 @@ struct LibraryView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color.black.ignoresSafeArea()
-                if games.isEmpty && viewModel.isLoading {
-                    ScrollView {
-                        LazyVGrid(columns: columns, spacing: 40) {
-                            ForEach(0..<12, id: \.self) { _ in
-                                GameCardSkeleton()
-                            }
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if games.isEmpty && viewModel.isLoading {
+                ScrollView {
+                    LazyVGrid(columns: columns, spacing: 40) {
+                        ForEach(0..<12, id: \.self) { _ in
+                            GameCardSkeleton()
                         }
-                        .padding(60)
                     }
-                    .allowsHitTesting(false)
-                } else if filteredGames.isEmpty {
-                    emptyState
-                } else {
-                    gameGrid
+                    .padding(60)
                 }
+                .allowsHitTesting(false)
+            } else if filteredGames.isEmpty {
+                emptyState
+            } else {
+                gameGrid
             }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Picker("Sort", selection: $sortOrder) {
-                            ForEach(LibrarySortOrder.allCases, id: \.self) { order in
-                                Text(order.rawValue).tag(order)
-                            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Picker("Sort", selection: $sortOrder) {
+                        ForEach(LibrarySortOrder.allCases, id: \.self) { order in
+                            Text(order.rawValue).tag(order)
                         }
-                    } label: {
-                        Label("Sort", systemImage: "arrow.up.arrow.down")
                     }
+                } label: {
+                    Label("Sort", systemImage: "arrow.up.arrow.down")
                 }
             }
         }

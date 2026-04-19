@@ -177,7 +177,7 @@ struct StreamView: View {
                     )
                     .frame(minWidth: 180)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
                 .tint(.white)
 
                 Button {
@@ -186,7 +186,7 @@ struct StreamView: View {
                     Label("Leave Game", systemImage: "house")
                         .frame(minWidth: 180)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
                 .tint(.white)
 
                 Button(role: .destructive) {
