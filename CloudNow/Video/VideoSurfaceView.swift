@@ -272,9 +272,9 @@ private final class WebRTCFrameRenderer: NSObject, LKRTCVideoRenderer {
 import GameController
 
 /// GCEventViewController subclass whose view IS the VideoSurfaceView.
-/// controllerUserInteractionEnabled = false prevents tvOS from routing any
-/// game-controller button (especially O/Circle → system back) through the
-/// focus engine while this VC is in the hierarchy.
+/// controllerUserInteractionEnabled is toggled dynamically: false during streaming
+/// (prevents O/Circle → system back) and true when the pause overlay is open
+/// (allows D-pad to navigate SwiftUI overlay buttons via the focus engine).
 final class StreamingViewController: GCEventViewController {
     let videoSurface = VideoSurfaceView()
 
@@ -290,6 +290,7 @@ import SwiftUI
 
 struct VideoSurfaceViewRepresentable: UIViewControllerRepresentable {
     let streamController: GFNStreamController
+    var showOverlay: Bool = false
 
     func makeUIViewController(context: Context) -> StreamingViewController {
         let vc = StreamingViewController()
@@ -301,5 +302,6 @@ struct VideoSurfaceViewRepresentable: UIViewControllerRepresentable {
 
     func updateUIViewController(_ vc: StreamingViewController, context: Context) {
         vc.videoSurface.videoTrack = streamController.videoTrack
+        vc.controllerUserInteractionEnabled = showOverlay
     }
 }
