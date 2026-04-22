@@ -138,7 +138,7 @@ struct HomeView: View {
     // MARK: Hero Banner
 
     private func heroBanner(_ game: GameInfo) -> some View {
-        VStack(alignment: .leading, spacing: 24) {
+        ZStack(alignment: .bottom) {
             AsyncImage(url: game.heroBannerUrl.flatMap { URL(string: $0) }) { phase in
                 switch phase {
                 case .success(let image):
@@ -154,8 +154,12 @@ struct HomeView: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 420)
-            .clipShape(RoundedRectangle(cornerRadius: 20))
-            .padding(.horizontal, 60)
+
+            LinearGradient(
+                colors: [.black.opacity(0.85), .black.opacity(0.5), .clear],
+                startPoint: .bottom,
+                endPoint: UnitPoint(x: 0.5, y: 0.55)
+            )
 
             HStack(spacing: 20) {
                 Button {
@@ -171,8 +175,13 @@ struct HomeView: View {
                     .foregroundStyle(.white)
                 Spacer()
             }
-            .padding(.horizontal, 60)
+            .padding(.horizontal, 40)
+            .padding(.vertical, 28)
         }
+        .frame(maxWidth: .infinity)
+        .frame(height: 420)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .padding(.horizontal, 60)
     }
 
     // MARK: Game Row
