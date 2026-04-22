@@ -83,6 +83,7 @@ struct LibraryView: View {
                     } label: {
                         GameCardLabel(game: game)
                     }
+                    .aspectRatio(2/3, contentMode: .fit)
                     .buttonStyle(.card)
                     .contextMenu {
                         Button {
