@@ -128,11 +128,14 @@ actor GamesClient {
 
     private func flattenPanels(_ payload: PanelsResponse) -> [GameInfo] {
         var games: [GameInfo] = []
+        var seen = Set<String>()
         for panel in payload.data?.panels ?? [] {
             for section in panel.sections ?? [] {
                 for item in section.items ?? [] {
                     guard item.__typename == "GameItem", let app = item.app else { continue }
-                    if let game = appToGame(app) { games.append(game) }
+                    if let game = appToGame(app), seen.insert(game.id).inserted {
+                        games.append(game)
+                    }
                 }
             }
         }
