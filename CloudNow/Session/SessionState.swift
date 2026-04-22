@@ -156,6 +156,19 @@ struct GameVariant: Equatable {
     let id: String
     let appStore: String
     var appId: String?
+
+    var storeName: String {
+        switch appStore {
+        case "STEAM": return "Steam"
+        case "EPIC_GAMES_STORE": return "Epic Games"
+        case "GOG": return "GOG"
+        case "EA_APP": return "EA App"
+        case "UBISOFT": return "Ubisoft Connect"
+        case "MICROSOFT": return "Xbox"
+        case "BATTLENET": return "Battle.net"
+        default: return appStore.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
 }
 
 // MARK: - Session Create Request

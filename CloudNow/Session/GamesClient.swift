@@ -145,15 +145,18 @@ actor GamesClient {
     private func appToGame(_ app: AppData) -> GameInfo? {
         guard let rawId = app.id else { return nil }
         let id = rawId.stringValue
-        let variants: [GameVariant] = app.variants?.compactMap { v in
+        var variants: [GameVariant] = app.variants?.compactMap { v in
             guard let vid = v.id else { return nil }
             return GameVariant(id: vid, appStore: v.appStore ?? "unknown", appId: isNumericId(vid) ? vid : nil)
         } ?? []
 
+        // Move the backend-selected variant to front so variants.first is the default launch store
         let selectedIndex = app.variants?.firstIndex { $0.gfn?.library?.selected == true } ?? 0
-        let safeIndex = max(0, selectedIndex)
-        let launchVariant = variants.indices.contains(safeIndex) ? variants[safeIndex] : variants.first
-        let appId = launchVariant?.appId ?? variants.first { isNumericId($0.appStore) }?.id
+        let safeIndex = min(max(0, selectedIndex), max(0, variants.count - 1))
+        if safeIndex > 0 && safeIndex < variants.count {
+            let selected = variants.remove(at: safeIndex)
+            variants.insert(selected, at: 0)
+        }
 
         return GameInfo(
             id: id,
@@ -161,9 +164,7 @@ actor GamesClient {
             boxArtUrl: app.images?.GAME_BOX_ART.flatMap { optimizeImageUrl($0) },
             heroBannerUrl: (app.images?.TV_BANNER ?? app.images?.HERO_IMAGE).flatMap { optimizeImageUrl($0, width: 1920) },
             isInLibrary: app.variants?.contains { $0.gfn?.library?.selected == true } ?? false,
-            variants: variants.map {
-                GameVariant(id: $0.id, appStore: $0.appStore, appId: appId)
-            }
+            variants: variants
         )
     }
 

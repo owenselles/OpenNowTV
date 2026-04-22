@@ -101,6 +101,20 @@ struct StoreView: View {
                                         systemImage: isFav ? "star.slash.fill" : "star"
                                     )
                                 }
+                                if game.variants.count > 1 {
+                                    Menu("Launch via...") {
+                                        ForEach(game.variants, id: \.id) { variant in
+                                            Button(variant.storeName) {
+                                                var g = game
+                                                if let idx = g.variants.firstIndex(of: variant), idx != 0 {
+                                                    g.variants.remove(at: idx)
+                                                    g.variants.insert(variant, at: 0)
+                                                }
+                                                onPlay(g)
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -121,16 +135,7 @@ struct StoreView: View {
     }
 
     private func storeName(_ store: String) -> String {
-        switch store {
-        case "STEAM": return "Steam"
-        case "EPIC_GAMES_STORE": return "Epic"
-        case "GOG": return "GOG"
-        case "EA_APP": return "EA"
-        case "UBISOFT": return "Ubisoft"
-        case "MICROSOFT": return "Xbox"
-        case "BATTLENET": return "Battle.net"
-        default: return store.replacingOccurrences(of: "_", with: " ").capitalized
-        }
+        GameVariant(id: "", appStore: store).storeName
     }
 
     private var emptyState: some View {

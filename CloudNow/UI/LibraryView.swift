@@ -95,6 +95,20 @@ struct LibraryView: View {
                                 systemImage: isFav ? "star.slash.fill" : "star"
                             )
                         }
+                        if game.variants.count > 1 {
+                            Menu("Launch via...") {
+                                ForEach(game.variants, id: \.id) { variant in
+                                    Button(variant.storeName) {
+                                        var g = game
+                                        if let idx = g.variants.firstIndex(of: variant), idx != 0 {
+                                            g.variants.remove(at: idx)
+                                            g.variants.insert(variant, at: 0)
+                                        }
+                                        onPlay(g)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
