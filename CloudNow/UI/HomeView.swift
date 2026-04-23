@@ -19,8 +19,8 @@ struct HomeView: View {
                             .frame(maxWidth: .infinity)
                             .frame(height: 420)
                             .clipShape(RoundedRectangle(cornerRadius: 20))
-                            .padding(.horizontal, 60)
                             .shimmer()
+                            .padding(.horizontal, 60)
                         VStack(alignment: .leading, spacing: 48) {
                             skeletonRow
                             skeletonRow
