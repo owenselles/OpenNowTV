@@ -345,8 +345,10 @@ actor NVIDIAAuthAPI {
             refreshToken: payload.refresh_token,
             idToken: payload.id_token,
             expiresAt: Date().addingTimeInterval(TimeInterval(payload.expires_in ?? 86400)),
-            clientToken: nil,
-            clientTokenExpiresAt: nil
+            clientToken: payload.client_token,
+            clientTokenExpiresAt: payload.client_token_expires_in.map {
+                Date().addingTimeInterval(TimeInterval($0))
+            }
         )
     }
 
@@ -398,6 +400,8 @@ private struct TokenResponse: Decodable {
     let refresh_token: String?
     let id_token: String?
     let expires_in: Int?
+    let client_token: String?
+    let client_token_expires_in: Int?
 }
 
 private struct ClientTokenResponse: Decodable {

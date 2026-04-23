@@ -1,3 +1,4 @@
+import BackgroundTasks
 import Foundation
 import Observation
 
@@ -31,6 +32,9 @@ final class AuthManager {
     private let api = NVIDIAAuthAPI()
     private var loginTask: Task<Void, Never>?
     private var activeRefreshTask: Task<AuthSession, Error>?
+    private var refreshTimer: Task<Void, Never>?
+
+    private static let bgTaskID = "com.owenselles.CloudNow.tokenRefresh"
 
     // MARK: Lifecycle
 
@@ -39,6 +43,8 @@ final class AuthManager {
               let saved = try? JSONDecoder().decode(AuthSession.self, from: stored)
         else { return }
         session = saved
+        scheduleProactiveRefresh()
+        scheduleBackgroundRefresh()
         await refreshIfNeeded()
     }
 
@@ -103,6 +109,8 @@ final class AuthManager {
 
                 let newSession = AuthSession(provider: selectedProvider, tokens: tokens, user: user)
                 session = newSession
+                scheduleProactiveRefresh()
+                scheduleBackgroundRefresh()
                 try persist(newSession)
                 loginPhase = .idle
             } catch is CancellationError {
@@ -122,6 +130,7 @@ final class AuthManager {
     // MARK: Logout
 
     func logout() {
+        refreshTimer?.cancel()
         session = nil
         loginPhase = .idle
         KeychainService.delete()
@@ -140,7 +149,7 @@ final class AuthManager {
 
     // MARK: Private
 
-    private func refreshIfNeeded() async {
+    func refreshIfNeeded() async {
         guard let s = session, s.tokens.isNearExpiry else { return }
         do {
             let refreshed = try await refresh(session: s)
@@ -152,6 +161,7 @@ final class AuthManager {
             // and retry on the next call.
             if s.tokens.isExpired {
                 print("[Auth] Token expired and all refresh mechanisms exhausted — clearing session, re-login required")
+                refreshTimer?.cancel()
                 session = nil
                 KeychainService.delete()
             } else {
@@ -221,8 +231,34 @@ final class AuthManager {
             print("[Auth] warning: failed to re-bootstrap client_token after refresh")
         }
         session = updated
+        scheduleProactiveRefresh()
+        scheduleBackgroundRefresh()
         try persist(updated)
         return updated
+    }
+
+    // MARK: Proactive Refresh
+
+    private func scheduleProactiveRefresh() {
+        refreshTimer?.cancel()
+        guard let s = session else { return }
+        let delay = s.tokens.expiresAt.timeIntervalSinceNow - (5 * 60)
+        guard delay > 0 else {
+            Task { await self.refreshIfNeeded() }
+            return
+        }
+        refreshTimer = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled else { return }
+            await self?.refreshIfNeeded()
+        }
+    }
+
+    func scheduleBackgroundRefresh() {
+        guard let s = session else { return }
+        let request = BGAppRefreshTaskRequest(identifier: Self.bgTaskID)
+        request.earliestBeginDate = s.tokens.expiresAt.addingTimeInterval(-(5 * 60))
+        try? BGTaskScheduler.shared.submit(request)
     }
 
     private func persist(_ s: AuthSession) throws {
