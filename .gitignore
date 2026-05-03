@@ -40,3 +40,6 @@ Podfile.lock
 *.mobileprovision
 *.provisionprofile
 AuthKey_*.p8
+
+# Local signing config (each dev sets their own DEVELOPMENT_TEAM)
+Local.xcconfig

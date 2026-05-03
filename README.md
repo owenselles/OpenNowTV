@@ -55,7 +55,18 @@ Target: **WebRTC**
 
 ### 3. Set your Team
 
-Xcode → CloudNow target → **Signing & Capabilities** → select your Apple Developer team.
+Copy the local config template and fill in your Apple Developer Team ID:
+
+```bash
+cp Local.xcconfig.example Local.xcconfig
+```
+
+Edit `Local.xcconfig` and replace `YOUR_TEAM_ID_HERE` with your Team ID (find it at [developer.apple.com](https://developer.apple.com) → Account → Membership).
+
+Then attach it to the project in Xcode:
+**Project navigator → CloudNow project → Info tab → Configurations → expand Debug and Release → set "Based on" to `Local.xcconfig`** for both.
+
+`Local.xcconfig` is gitignored and should never be committed.
 
 ### 4. Build & Run
 
