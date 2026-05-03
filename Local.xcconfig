@@ -1,0 +1,5 @@
+// Local signing configuration — gitignored, never commit this file.
+// Copy from Local.xcconfig.example and fill in your own Apple Developer Team ID.
+// To attach to the project: Xcode → project → Info tab → select a configuration → set "Based on" to this file.
+
+DEVELOPMENT_TEAM = 8677E646RW
