@@ -9,6 +9,11 @@ actor GamesClient {
     private static let metadataQueryHash = "39187e85b6dcf60b7279a5f233288b0a8b69a8b1dbcfb5b25555afdcb988f0d7"
     private static let clientId = "ec7e38d4-03af-4b58-b131-cfb0495903ab"
     private static let clientVersion = "2.0.80.173"
+    private static var gfnLocale: String {
+        let lang = Locale.current.language.languageCode?.identifier ?? "en"
+        let region = Locale.current.region?.identifier ?? "US"
+        return "\(lang)_\(region)"
+    }
 
     private let urlSession = URLSession.shared
 
@@ -64,7 +69,7 @@ actor GamesClient {
     }
 
     private func fetchMetadata(token: String, appIds: [String], vpcId: String) async throws -> [AppData] {
-        let variables: [String: Any] = ["vpcId": vpcId, "locale": "en_US", "appIds": appIds]
+        let variables: [String: Any] = ["vpcId": vpcId, "locale": GamesClient.gfnLocale, "appIds": appIds]
         let extensions: [String: Any] = ["persistedQuery": ["sha256Hash": GamesClient.metadataQueryHash]]
         let huId = "\(String(Int(Date().timeIntervalSince1970 * 1000), radix: 16))\(String(Int.random(in: 0..<Int.max), radix: 16))"
 
@@ -103,7 +108,7 @@ actor GamesClient {
     }
 
     private func fetchPanels(token: String, panelNames: [String], vpcId: String) async throws -> [GameInfo] {
-        let variables: [String: Any] = ["vpcId": vpcId, "locale": "en_US", "panelNames": panelNames]
+        let variables: [String: Any] = ["vpcId": vpcId, "locale": GamesClient.gfnLocale, "panelNames": panelNames]
         let extensions: [String: Any] = ["persistedQuery": ["sha256Hash": GamesClient.panelsQueryHash]]
         let requestType = panelNames.contains("LIBRARY") ? "panels/Library" : "panels/MainV2"
         let huId = "\(String(Int(Date().timeIntervalSince1970 * 1000), radix: 16))\(String(Int.random(in: 0..<Int.max), radix: 16))"

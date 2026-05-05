@@ -111,7 +111,7 @@ struct StreamView: View {
         }
     }
 
-    private var loadingLabel: String {
+    private var loadingLabel: LocalizedStringKey {
         switch loadingPhase {
         case .finding:
             return "Connecting to a GeForce NOW server…"
@@ -250,7 +250,7 @@ struct StreamView: View {
         .padding(60)
     }
 
-    private var remoteModeLabel: String {
+    private var remoteModeLabel: LocalizedStringKey {
         switch streamController.remoteMode {
         case .mouse:     return "Remote: Mouse"
         case .gamepad:   return "Remote: Gamepad"
@@ -307,9 +307,9 @@ struct StreamView: View {
         let (color, icon, message): (Color, String, String) = {
             let timeText = warning.secondsLeft.map { " (\($0)s left)" } ?? ""
             switch warning.code {
-            case 3: return (.red,    "clock.badge.xmark",     "Session ending soon\(timeText)")
-            case 2: return (.orange, "clock.badge.exclamationmark", "~5 minutes remaining\(timeText)")
-            default: return (.yellow, "clock",                "Session limit approaching\(timeText)")
+            case 3: return (.red,    "clock.badge.xmark",     String(localized: "Session ending soon\(timeText)"))
+            case 2: return (.orange, "clock.badge.exclamationmark", String(localized: "~5 minutes remaining\(timeText)"))
+            default: return (.yellow, "clock",                String(localized: "Session limit approaching\(timeText)"))
             }
         }()
         return Label(message, systemImage: icon)
@@ -343,10 +343,10 @@ struct StreamView: View {
 
     private func entitlementMessage(from raw: String) -> String {
         if raw.uppercased().contains("ENTITLEMENT") || raw.contains("3237093650") {
-            return "\(game.title) is not in your GeForce NOW library."
+            return String(localized: "\(game.title) is not in your GeForce NOW library.")
         }
         if raw.contains("SESSION_LIMIT_EXCEEDED") {
-            return "A previous session is still active. Please wait a moment and try again."
+            return String(localized: "A previous session is still active. Please wait a moment and try again.")
         }
         return raw
     }

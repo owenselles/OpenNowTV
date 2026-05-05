@@ -255,11 +255,11 @@ struct SettingsView: View {
         }
     }
 
-    private func zoneLabel(_ url: String?) -> String {
+    private func zoneLabel(_ url: String?) -> LocalizedStringKey {
         guard let url else { return "Automatic" }
         // Extract zone ID from URL like "https://np-aws-us-n-virginia-1.cloudmatchbeta.nvidiagrid.net/"
         let host = URL(string: url)?.host ?? url
-        return host.components(separatedBy: ".").first?.uppercased() ?? url
+        return LocalizedStringKey(host.components(separatedBy: ".").first?.uppercased() ?? url)
     }
 
     private struct ResolutionEntry { let res: String; let badge: String; let symbol: String }
@@ -270,7 +270,7 @@ struct SettingsView: View {
         ResolutionEntry(res: "3840x2160", badge: "4K",      symbol: "4k.tv"),
     ]
 
-    private func colorQualityLabel(_ q: ColorQuality) -> String {
+    private func colorQualityLabel(_ q: ColorQuality) -> LocalizedStringKey {
         switch q {
         case .sdr8bit: return "SDR 8-bit"
         case .sdr10bit: return "SDR 10-bit"

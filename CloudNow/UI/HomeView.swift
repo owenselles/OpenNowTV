@@ -144,7 +144,7 @@ struct HomeView: View {
 
     // MARK: Game Row
 
-    private func gameRow(title: String, games: [GameInfo], badge: String? = nil, isFavoritesRow: Bool = false) -> some View {
+    private func gameRow(title: LocalizedStringKey, games: [GameInfo], badge: String? = nil, isFavoritesRow: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 10) {
                 Text(title)

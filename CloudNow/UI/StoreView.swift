@@ -67,7 +67,7 @@ struct StoreView: View {
                         HStack(spacing: 12) {
                             filterChip("All", isSelected: selectedStore == nil) { selectedStore = nil }
                             ForEach(availableStores, id: \.self) { store in
-                                filterChip(storeName(store), isSelected: selectedStore == store) {
+                                filterChip(LocalizedStringKey(storeName(store)), isSelected: selectedStore == store) {
                                     selectedStore = selectedStore == store ? nil : store
                                 }
                             }
@@ -128,7 +128,7 @@ struct StoreView: View {
         }
     }
 
-    private func filterChip(_ label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    private func filterChip(_ label: LocalizedStringKey, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
                 .font(.caption.weight(.semibold))

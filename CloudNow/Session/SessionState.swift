@@ -8,8 +8,16 @@ struct StreamSettings: Codable, Equatable {
     var maxBitrateKbps: Int = 20_000 { didSet { maxBitrateKbps = min(maxBitrateKbps, 100_000) } }
     var codec: VideoCodec = .h264
     var colorQuality: ColorQuality = .sdr8bit
-    var keyboardLayout: String = "en-US"
-    var gameLanguage: String = "en_US"
+    var keyboardLayout: String = {
+        let lang = Locale.current.language.languageCode?.identifier ?? "en"
+        let region = Locale.current.region?.identifier ?? "US"
+        return "\(lang)-\(region)"
+    }()
+    var gameLanguage: String = {
+        let lang = Locale.current.language.languageCode?.identifier ?? "en"
+        let region = Locale.current.region?.identifier ?? "US"
+        return "\(lang)_\(region)"
+    }()
     var enableL4S: Bool = false
     var micEnabled: Bool = false
     /// Radial deadzone applied to analog stick axes (0.0–1.0). Default 15%.

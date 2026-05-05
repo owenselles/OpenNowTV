@@ -63,7 +63,7 @@ struct LibraryView: View {
                 Menu {
                     Picker("Sort", selection: $sortOrder) {
                         ForEach(LibrarySortOrder.allCases, id: \.self) { order in
-                            Text(order.rawValue).tag(order)
+                            Text(LocalizedStringKey(order.rawValue)).tag(order)
                         }
                     }
                 } label: {
