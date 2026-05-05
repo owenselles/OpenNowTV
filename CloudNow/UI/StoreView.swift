@@ -6,10 +6,12 @@ struct StoreView: View {
 
     @Environment(GamesViewModel.self) var viewModel
 
-    @State private var notOwnedGame: GameInfo?
-    @State private var showNotOwned = false
+    @State private var carouselRequest: CarouselRequest?
+    @FocusState private var focusedGameId: String?
+    @State private var expandedGame: GameInfo? // Ajout pour la vue étendue directe
     @State private var searchText = ""
     @State private var selectedStore: String? = nil
+    @Namespace private var carouselScope
 
     private var availableStores: [String] {
         let stores = Set(games.flatMap { $0.variants.map { $0.appStore } }
@@ -28,19 +30,13 @@ struct StoreView: View {
         return result
     }
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 220, maximum: 260), spacing: 40)
-    ]
-
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             if games.isEmpty && viewModel.isLoading {
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: 40) {
-                        ForEach(0..<12, id: \.self) { _ in
-                            GameCardSkeleton()
-                        }
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 220, maximum: 260), spacing: 40)], spacing: 40) {
+                        ForEach(0..<12, id: \.self) { _ in GameCardSkeleton() }
                     }
                     .padding(60)
                 }
@@ -52,79 +48,56 @@ struct StoreView: View {
             }
         }
         .searchable(text: $searchText, prompt: "Search games")
-        .alert("Not in Your Library", isPresented: $showNotOwned, presenting: notOwnedGame) { _ in
-            Button("OK") { }
-        } message: { game in
-            Text("\(game.title) is not in your GeForce NOW library. Add it via the GeForce NOW store on another device.")
+        .overlay {
+            if let req = carouselRequest {
+                GameCarouselView(request: req, onPlay: onPlay, onDismiss: { lastId in
+                    withAnimation(.easeInOut(duration: 0.25)) { carouselRequest = nil }
+                    Task { @MainActor in focusedGameId = lastId }
+                })
+                .environment(viewModel)
+                .focusScope(carouselScope)
+                .transition(.opacity)
+                .ignoresSafeArea()
+            }
         }
+        .fullScreenCover(item: $expandedGame) { game in
+            ExpandedDetailView(game: game, onPlay: { g in
+                expandedGame = nil
+                onPlay(g)
+            })
+            .environment(viewModel)
+        }
+        .animation(.easeInOut(duration: 0.25), value: carouselRequest?.id)
     }
 
     private var gameGrid: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                if availableStores.count > 1 {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            filterChip("All", isSelected: selectedStore == nil) { selectedStore = nil }
-                            ForEach(availableStores, id: \.self) { store in
-                                filterChip(storeName(store), isSelected: selectedStore == store) {
-                                    selectedStore = selectedStore == store ? nil : store
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 60)
-                    }
-                    .scrollClipDisabled()
-                    .padding(.vertical, 32)
-                }
-                LazyVGrid(columns: columns, spacing: 40) {
-                    ForEach(filteredGames) { game in
-                        Button {
-                            if game.isInLibrary {
-                                onPlay(viewModel.gameWithPreferredStore(game))
-                            } else {
-                                notOwnedGame = game
-                                showNotOwned = true
-                            }
-                        } label: {
-                            StoreCardLabel(game: game)
-                        }
-                        .aspectRatio(2/3, contentMode: .fit)
-                        .buttonStyle(.card)
-                        .contextMenu {
-                            if game.isInLibrary {
-                                Button {
-                                    viewModel.toggleFavorite(game.id)
-                                } label: {
-                                    let isFav = viewModel.favoriteIds.contains(game.id)
-                                    Label(
-                                        isFav ? "Remove from Favorites" : "Add to Favorites",
-                                        systemImage: isFav ? "star.slash.fill" : "star"
-                                    )
-                                }
-                                if game.variants.count > 1 {
-                                    Menu("Launch via...") {
-                                        ForEach(game.variants, id: \.id) { variant in
-                                            Button {
-                                                viewModel.setPreferredStore(gameId: game.id, variantId: variant.id)
-                                            } label: {
-                                                let isSelected = viewModel.preferredVariantId(for: game) == variant.id
-                                                if isSelected {
-                                                    Label(variant.storeName, systemImage: "checkmark")
-                                                } else {
-                                                    Text(variant.storeName)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+        VStack(spacing: 0) {
+            if availableStores.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        filterChip("All", isSelected: selectedStore == nil) { selectedStore = nil }
+                        ForEach(availableStores, id: \.self) { store in
+                            filterChip(storeName(store), isSelected: selectedStore == store) {
+                                selectedStore = selectedStore == store ? nil : store
                             }
                         }
                     }
+                    .padding(.horizontal, 60)
                 }
-                .padding(60)
-                .padding(.top, 0)
+                .scrollClipDisabled()
+                .padding(.vertical, 32)
             }
+            GameGrid(
+                games: filteredGames,
+                focusedId: $focusedGameId,
+                showLibraryBadge: true,
+                onSelect: { game in
+                    carouselRequest = CarouselRequest(games: filteredGames, startId: game.id)
+                },
+                onExpand: { game in
+                    expandedGame = game
+                }
+            )
         }
     }
 
@@ -157,41 +130,5 @@ struct StoreView: View {
             }
         }
         .padding(60)
-    }
-}
-
-// MARK: - Store Card Label
-
-private struct StoreCardLabel: View {
-    let game: GameInfo
-
-    var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            GameBoxArt(url: game.boxArtUrl)
-
-            LinearGradient(
-                colors: [.black.opacity(0.7), .clear],
-                startPoint: .bottom,
-                endPoint: .center
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-
-            Text(game.title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white)
-                .lineLimit(2)
-                .padding(10)
-
-            if game.isInLibrary {
-                Text("In Library")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(.green.opacity(0.85), in: Capsule())
-                    .padding(8)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-            }
-        }
     }
 }
