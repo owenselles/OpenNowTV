@@ -225,8 +225,10 @@ actor NVIDIAAuthAPI {
         request.setValue("https://nvfile", forHTTPHeaderField: "Origin")
         request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
         let (data, response) = try await session.data(for: request)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-            throw AuthError.clientTokenFailed
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard statusCode == 200 else {
+            let body = String(data: data, encoding: .utf8) ?? "(empty)"
+            throw AuthError.clientTokenFailed("HTTP \(statusCode): \(body)")
         }
         let payload = try JSONDecoder().decode(ClientTokenResponse.self, from: data)
         let expiresAt = Date().addingTimeInterval(TimeInterval(payload.expires_in ?? 86400))
@@ -243,13 +245,22 @@ actor NVIDIAAuthAPI {
         request.setValue("application/x-www-form-urlencoded; charset=UTF-8", forHTTPHeaderField: "Content-Type")
         request.setValue("https://nvfile", forHTTPHeaderField: "Origin")
         request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
-        let body = "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Aclient_token&client_token=\(clientToken)&client_id=\(NVIDIAAuth.clientID)&sub=\(userId)"
-        request.httpBody = body.data(using: .utf8)
-        let (data, response) = try await session.data(for: request)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-            throw AuthError.clientTokenFailed
+        // Try main clientID first, then device-flow clientID as fallback.
+        // The stored clientToken may have been issued under either, depending on
+        // which step of the login flow succeeded.
+        var lastError: Error = AuthError.clientTokenFailed("No client IDs tried")
+        for clientID in [NVIDIAAuth.clientID, NVIDIAAuth.deviceFlowClientID] {
+            let body = "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Aclient_token&client_token=\(clientToken)&client_id=\(clientID)&sub=\(userId)"
+            request.httpBody = body.data(using: .utf8)
+            let (data, response) = try await session.data(for: request)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if statusCode == 200 { return try parseTokenResponse(data) }
+            let responseBody = String(data: data, encoding: .utf8) ?? "(empty)"
+            lastError = AuthError.clientTokenFailed("HTTP \(statusCode): \(responseBody)")
+            if statusCode < 400 || statusCode >= 500 { throw lastError }
+            // 4xx with clientID mismatch → try next clientID
         }
-        return try parseTokenResponse(data)
+        throw lastError
     }
 
     // MARK: Device Flow (PIN-based login)
@@ -438,7 +449,7 @@ enum AuthError: Error, LocalizedError {
     case noAuthCode
     case tokenExchangeFailed(String)
     case tokenRefreshFailed(String)
-    case clientTokenFailed
+    case clientTokenFailed(String)
     case noSession
     case deviceFlowFailed(String)
     case deviceFlowExpired
@@ -449,7 +460,7 @@ enum AuthError: Error, LocalizedError {
         case .noAuthCode: return "No authorization code received."
         case .tokenExchangeFailed(let msg): return "Token exchange failed: \(msg)"
         case .tokenRefreshFailed(let msg): return "Token refresh failed: \(msg)"
-        case .clientTokenFailed: return "Failed to obtain client token."
+        case .clientTokenFailed(let msg): return "Failed to obtain client token: \(msg)"
         case .noSession: return "No authenticated session."
         case .deviceFlowFailed(let msg): return "Device login failed: \(msg)"
         case .deviceFlowExpired: return "Login code expired. Please try again."
