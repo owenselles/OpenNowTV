@@ -15,10 +15,9 @@ struct LibraryView: View {
 
     @State private var searchText = ""
     @State private var sortOrder: LibrarySortOrder = .default
-
-    private let columns = [
-        GridItem(.adaptive(minimum: 220, maximum: 260), spacing: 40)
-    ]
+    @State private var carouselRequest: CarouselRequest?
+    @State private var expandedGame: GameInfo? // Ajout pour la vue étendue directe
+    @FocusState private var focusedGameId: String?
 
     private var filteredGames: [GameInfo] {
         var result = searchText.isEmpty
@@ -44,10 +43,8 @@ struct LibraryView: View {
             Color.black.ignoresSafeArea()
             if games.isEmpty && viewModel.isLoading {
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: 40) {
-                        ForEach(0..<12, id: \.self) { _ in
-                            GameCardSkeleton()
-                        }
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 220, maximum: 260), spacing: 40)], spacing: 40) {
+                        ForEach(0..<12, id: \.self) { _ in GameCardSkeleton() }
                     }
                     .padding(60)
                 }
@@ -58,6 +55,21 @@ struct LibraryView: View {
                 gameGrid
             }
         }
+        .fullScreenCover(item: $carouselRequest) { req in
+            GameCarouselView(request: req, onPlay: onPlay, onDismiss: { lastId in
+                carouselRequest = nil
+                Task { @MainActor in focusedGameId = lastId }
+            })
+            .environment(viewModel)
+        }
+        .fullScreenCover(item: $expandedGame) { game in
+            GameDetailView(game: game, onPlay: { g in
+                expandedGame = nil
+                onPlay(g)
+            })
+            .environment(viewModel)
+        }
+        .animation(.easeInOut(duration: 0.25), value: carouselRequest?.id)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -75,47 +87,16 @@ struct LibraryView: View {
     }
 
     private var gameGrid: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 40) {
-                ForEach(filteredGames) { game in
-                    Button {
-                        onPlay(viewModel.gameWithPreferredStore(game))
-                    } label: {
-                        GameCardLabel(game: game)
-                    }
-                    .aspectRatio(2/3, contentMode: .fit)
-                    .buttonStyle(.card)
-                    .contextMenu {
-                        Button {
-                            viewModel.toggleFavorite(game.id)
-                        } label: {
-                            let isFav = viewModel.favoriteIds.contains(game.id)
-                            Label(
-                                isFav ? "Remove from Favorites" : "Add to Favorites",
-                                systemImage: isFav ? "star.slash.fill" : "star"
-                            )
-                        }
-                        if game.variants.count > 1 {
-                            Menu("Launch via...") {
-                                ForEach(game.variants, id: \.id) { variant in
-                                    Button {
-                                        viewModel.setPreferredStore(gameId: game.id, variantId: variant.id)
-                                    } label: {
-                                        let isSelected = viewModel.preferredVariantId(for: game) == variant.id
-                                        if isSelected {
-                                            Label(variant.storeName, systemImage: "checkmark")
-                                        } else {
-                                            Text(variant.storeName)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+        GameGrid(
+            games: filteredGames,
+            focusedId: $focusedGameId,
+            onSelect: { game in
+                carouselRequest = CarouselRequest(games: filteredGames, startId: game.id)
+            },
+            onExpand: { game in
+                expandedGame = game
             }
-            .padding(60)
-        }
+        )
     }
 
     private var emptyState: some View {
@@ -142,8 +123,7 @@ struct LibraryView: View {
     }
 }
 
-// MARK: - Shared Box Art
-
+// MARK: - Shared Game Views
 struct GameBoxArt: View {
     let url: String?
     @State private var attempt = 0
@@ -179,10 +159,9 @@ struct GameBoxArt: View {
     }
 }
 
-// MARK: - Game Card Label (shared)
-
 struct GameCardLabel: View {
     let game: GameInfo
+    var showLibraryBadge: Bool = false
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -200,30 +179,84 @@ struct GameCardLabel: View {
                 .foregroundStyle(.white)
                 .lineLimit(2)
                 .padding(10)
+
+            if showLibraryBadge && game.isInLibrary {
+                Text("In Library")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.green.opacity(0.85), in: Capsule())
+                    .padding(8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            }
         }
     }
 }
 
-// MARK: - Game Card (used on Home rows)
+// MARK: - Shared Game Grid
+
+struct GameGrid: View {
+    let games: [GameInfo]
+    var focusedId: FocusState<String?>.Binding
+    var showLibraryBadge: Bool = false
+    let onSelect: (GameInfo) -> Void
+    let onExpand: (GameInfo) -> Void // Nouveau closure pour l'expansion directe
+
+    @Environment(GamesViewModel.self) var viewModel
+
+    private let columns = [GridItem(.adaptive(minimum: 220, maximum: 260), spacing: 40)]
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 40) {
+                ForEach(games) { game in
+                    Button { onSelect(game) } label: {
+                        GameCardLabel(game: game, showLibraryBadge: showLibraryBadge)
+                    }
+                    .aspectRatio(2/3, contentMode: .fit)
+                    .buttonStyle(.card)
+                    .focused(focusedId, equals: game.id)
+                    .contextMenu {
+                        Button {
+                            onExpand(game)
+                        } label: {
+                            Label("Info", systemImage: "info.circle")
+                        }
+                        if game.isInLibrary {
+                            let isFav = viewModel.favoriteIds.contains(game.id)
+                            Button { viewModel.toggleFavorite(game.id) } label: {
+                                Label(
+                                    isFav ? "Remove from Favorites" : "Add to Favorites",
+                                    systemImage: isFav ? "star.slash.fill" : "star"
+                                )
+                            }
+                            if game.variants.count > 1 {
+                                Menu("Launch via...") {
+                                    ForEach(game.variants, id: \.id) { variant in
+                                        Button {
+                                            viewModel.setPreferredStore(gameId: game.id, variantId: variant.id)
+                                        } label: {
+                                            if viewModel.preferredVariantId(for: game) == variant.id {
+                                                Label(variant.storeName, systemImage: "checkmark")
+                                            } else {
+                                                Text(variant.storeName)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(60)
+        }
+    }
+}
 
 struct GameCardView: View {
     let game: GameInfo
-    let onPlay: () -> Void
-
-    var body: some View {
-        Button(action: onPlay) {
-            GameCardLabel(game: game)
-        }
-        .buttonStyle(.card)
-    }
-}
-
-// MARK: - Library Card
-
-struct LibraryCardView: View {
-    let game: GameInfo
-    let isFavorite: Bool
-    let onFavoriteToggle: () -> Void
     let onPlay: () -> Void
 
     var body: some View {

@@ -146,10 +146,44 @@ struct SubscriptionInfo {
 struct GameInfo: Identifiable, Equatable {
     let id: String
     let title: String
+    let longDescription: String?
+    let genres: [String]?
+    let developer: String?
+    let publisher: String?
+    let contentRating: String?
     let boxArtUrl: String?
     let heroBannerUrl: String?
+    var screenshots: [String]
     var isInLibrary: Bool
     var variants: [GameVariant]
+}
+
+extension GameInfo {
+    var genreItems: [String] {
+        let mapped = (genres ?? []).map { GameInfo.genreLabel($0) }
+        return mapped.isEmpty ? variants.map(\.storeName) : mapped
+    }
+
+    static func genreLabel(_ code: String) -> String {
+        switch code {
+        case "ACTION":                return "Action"
+        case "ADVENTURE":             return "Adventure"
+        case "ROLE_PLAYING":          return "Role-Playing"
+        case "STRATEGY":              return "Strategy"
+        case "SPORTS":                return "Sports"
+        case "RACING":                return "Racing"
+        case "SIMULATION":            return "Simulation"
+        case "PUZZLE":                return "Puzzle"
+        case "SHOOTER":               return "Shooter"
+        case "FIGHTING":              return "Fighting"
+        case "PLATFORMER":            return "Platformer"
+        case "HORROR":                return "Horror"
+        case "CASUAL":                return "Casual"
+        case "INDIE":                 return "Indie"
+        case "MASSIVELY_MULTIPLAYER": return "MMO"
+        default: return code.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
 }
 
 struct GameVariant: Equatable {
