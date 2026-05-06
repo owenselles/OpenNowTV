@@ -11,7 +11,6 @@ struct StoreView: View {
     @State private var expandedGame: GameInfo? // Ajout pour la vue étendue directe
     @State private var searchText = ""
     @State private var selectedStore: String? = nil
-    @Namespace private var carouselScope
 
     private var availableStores: [String] {
         let stores = Set(games.flatMap { $0.variants.map { $0.appStore } }
@@ -48,20 +47,15 @@ struct StoreView: View {
             }
         }
         .searchable(text: $searchText, prompt: "Search games")
-        .overlay {
-            if let req = carouselRequest {
-                GameCarouselView(request: req, onPlay: onPlay, onDismiss: { lastId in
-                    withAnimation(.easeInOut(duration: 0.25)) { carouselRequest = nil }
-                    Task { @MainActor in focusedGameId = lastId }
-                })
-                .environment(viewModel)
-                .focusScope(carouselScope)
-                .transition(.opacity)
-                .ignoresSafeArea()
-            }
+        .fullScreenCover(item: $carouselRequest) { req in
+            GameCarouselView(request: req, onPlay: onPlay, onDismiss: { lastId in
+                carouselRequest = nil
+                Task { @MainActor in focusedGameId = lastId }
+            })
+            .environment(viewModel)
         }
         .fullScreenCover(item: $expandedGame) { game in
-            ExpandedDetailView(game: game, onPlay: { g in
+            GameDetailView(game: game, onPlay: { g in
                 expandedGame = nil
                 onPlay(g)
             })

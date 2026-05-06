@@ -18,7 +18,6 @@ struct LibraryView: View {
     @State private var carouselRequest: CarouselRequest?
     @State private var expandedGame: GameInfo? // Ajout pour la vue étendue directe
     @FocusState private var focusedGameId: String?
-    @Namespace private var carouselScope
 
     private var filteredGames: [GameInfo] {
         var result = searchText.isEmpty
@@ -56,20 +55,15 @@ struct LibraryView: View {
                 gameGrid
             }
         }
-        .overlay {
-            if let req = carouselRequest {
-                GameCarouselView(request: req, onPlay: onPlay, onDismiss: { lastId in
-                    withAnimation(.easeInOut(duration: 0.25)) { carouselRequest = nil }
-                    Task { @MainActor in focusedGameId = lastId }
-                })
-                .environment(viewModel)
-                .focusScope(carouselScope)
-                .transition(.opacity)
-                .ignoresSafeArea()
-            }
+        .fullScreenCover(item: $carouselRequest) { req in
+            GameCarouselView(request: req, onPlay: onPlay, onDismiss: { lastId in
+                carouselRequest = nil
+                Task { @MainActor in focusedGameId = lastId }
+            })
+            .environment(viewModel)
         }
         .fullScreenCover(item: $expandedGame) { game in
-            ExpandedDetailView(game: game, onPlay: { g in
+            GameDetailView(game: game, onPlay: { g in
                 expandedGame = nil
                 onPlay(g)
             })
